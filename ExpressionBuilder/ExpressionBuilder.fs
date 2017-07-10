@@ -4,7 +4,6 @@ module Expression =
     open System
     open System.Reflection
 
-
     let notSupported x = new NotSupportedException(sprintf "%O" x) |> raise
 
     let getTable<'T> (tableName:String) : 'T = new NotImplementedException () |> raise
@@ -44,7 +43,6 @@ module Expression =
         | Some t -> t
         | _ -> "unknown type"
 
-    
     let rec toAiql = 
         function
         | PipePattern expr -> toAiql expr
