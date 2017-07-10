@@ -1,9 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.26430.14
+VisualStudioVersion = 15.0.26430.15
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "AiqlTypeProvider", "AiqlTypeProvider\AiqlTypeProvider.fsproj", "{269F73AB-469C-47E9-A63D-CAD9D3F8AE96}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "ExpressionBuilder", "ExpressionBuilder\ExpressionBuilder.fsproj", "{E9EFB143-1136-41DB-B386-11A49F7CEFF9}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "AiqlTest", "AiqlTest\AiqlTest.fsproj", "{845C3B84-A49D-4EC6-94A4-959B38CB1EF3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +19,14 @@ Global
 		{269F73AB-469C-47E9-A63D-CAD9D3F8AE96}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{269F73AB-469C-47E9-A63D-CAD9D3F8AE96}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{269F73AB-469C-47E9-A63D-CAD9D3F8AE96}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E9EFB143-1136-41DB-B386-11A49F7CEFF9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E9EFB143-1136-41DB-B386-11A49F7CEFF9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E9EFB143-1136-41DB-B386-11A49F7CEFF9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E9EFB143-1136-41DB-B386-11A49F7CEFF9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{845C3B84-A49D-4EC6-94A4-959B38CB1EF3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{845C3B84-A49D-4EC6-94A4-959B38CB1EF3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{845C3B84-A49D-4EC6-94A4-959B38CB1EF3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{845C3B84-A49D-4EC6-94A4-959B38CB1EF3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
