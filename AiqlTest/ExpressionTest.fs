@@ -16,8 +16,6 @@ type Requests = {
 }
 
 module Tests = 
-
-    
     type ExpressionTest(output:ITestOutputHelper) = 
             let sendQuery (query:string) = 
                 async{
@@ -61,14 +59,3 @@ module Tests =
                     getTable<Requests[]> "requests" |> where (fun s -> s.resultCode = x)
                 @>
                 |> testQuery
-
-            
-
-
-                
-        
-
-
-
-
-    
