@@ -1,4 +1,43 @@
-﻿namespace AiqlTypeProvider
+﻿namespace AzureQueryTypeProvider
+
+open ProviderImplementation.ProvidedTypes
+open Microsoft.FSharp.Core.CompilerServices
+open System
+open System.Reflection
+open System.Net.Http
+open Newtonsoft.Json
+open ExpressionBuilder.Expression
+open System.Web
+
+
+type ApplicationInsightsBase (address:string, apiKey:string) =
+    static member QueryData ([<ReflectedDefinition>] q: Quotations.Expr<#ApplicationInsightsBase -> _>) =
+        
+        let query = 
+            match q with 
+            | Quotations.Patterns.Lambda (vars, body) -> 
+                ExpressionBuilder.Expression.toAiql body
+            | _ -> failwith (sprintf "Unexpected query: %O" q)
+
+        async {
+            use client = new HttpClient()
+            client.DefaultRequestHeaders.Add("x-api-key",apiKey)
+            let! result = 
+                client.GetAsync(sprintf "%s/query?query=%s" address (HttpUtility.UrlEncode query))
+                |> Async.AwaitTask
+
+            let! resultText = result.Content.ReadAsStringAsync() |> Async.AwaitTask
+            if result.IsSuccessStatusCode then
+                return resultText
+            else
+                return failwith (sprintf "Failed query, Status code: %d;\n%s" (int result.StatusCode) resultText)
+
+        }
+
+type SourceStream = class end
+
+
+namespace AiqlTypeProvider
 
 open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Core.CompilerServices
@@ -31,7 +70,7 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
     let ns = "AzureQueryTypeProvider"
     let asm = Assembly.GetExecutingAssembly()
 
-    let mainType = ProvidedTypeDefinition(asm, ns, "Tables",  Some typeof<obj>)
+    let mainType = ProvidedTypeDefinition(asm, ns, "ApplicationInsights",  Some typeof<AzureQueryTypeProvider.ApplicationInsightsBase>)
     let createTypes typeName (address:string) (key:string) =
         use client = new HttpClient()
         client.DefaultRequestHeaders.Add("x-api-key",key)
@@ -39,7 +78,7 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
             client.GetAsync(address).Result.Content.ReadAsStringAsync().Result
 
         let tableData = JsonConvert.DeserializeObject<TableResult>(result)
-        let tableType = ProvidedTypeDefinition(asm, ns, typeName,  Some typeof<obj>)
+        let tableType = ProvidedTypeDefinition(asm, ns, typeName,  Some typeof<AzureQueryTypeProvider.ApplicationInsightsBase>)
         let firstLetterToUpper (s:string) =
             sprintf "%c%s" (Char.ToUpper(s.[0])) (s.Substring(1,s.Length-1))
             
@@ -49,11 +88,11 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
             |> Seq.map(fun x -> x.[0], x.[1], Type.GetType( x.[2]))
             |> Seq.groupBy (fun (tableName, _, _) -> tableName )
             |> Seq.map(fun (key, grp) -> 
-                                let myType = ProvidedTypeDefinition(firstLetterToUpper key,  Some typeof<obj>)
-                                for (_, columnName, columnType) in grp do 
-                                    myType.AddMember <| ProvidedProperty(firstLetterToUpper columnName, columnType, GetterCode = (fun args -> <@@ NotImplementedException "" |> raise @@>))
-                                myType
-                                )
+                let myType = ProvidedTypeDefinition(firstLetterToUpper key,  Some typeof<AzureQueryTypeProvider.SourceStream>)
+                for (_, columnName, columnType) in grp do 
+                    myType.AddMember <| ProvidedProperty(firstLetterToUpper columnName, columnType, GetterCode = (fun args -> <@@ NotImplementedException "" |> raise @@>))
+                myType
+            )
             |> Seq.toList
             
         for typedef in tableTypes do 
