@@ -11,11 +11,20 @@ open ExpressionBuilder.Expression
 
 type Result<'T> = OK of 'T | Error of string
 
-type Requests = {
-    resultCode:int
-}
+type Requests =
+    abstract resultCode:int
 
-module Tests = 
+module Tests =
+    type Trace= 
+        abstract timestamp : DateTime
+        abstract operation_name : string
+
+        //static member QueryData (expr:Quotations.Expr<Trace -> 'a>):'a
+
+
+    type Tables =
+        abstract requests : Requests[]
+
     type ExpressionTest(output:ITestOutputHelper) = 
             let sendQuery (query:string) = 
                 async{
@@ -57,5 +66,15 @@ module Tests =
                 <@
                     let x = 1
                     getTable<Requests[]> "requests" |> where (fun s -> s.resultCode = x)
+                @>
+                |> testQuery
+
+
+            [<Fact>]
+            let whereExprLetLambda () = 
+                <@
+                    fun (tables:Tables) -> 
+                        let x = 1
+                        tables.requests |> where (fun s -> s.resultCode = x)
                 @>
                 |> testQuery

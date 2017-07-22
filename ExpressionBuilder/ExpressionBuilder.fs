@@ -45,6 +45,8 @@ module Expression =
 
     let rec toAiql = 
         function
+        | Quotations.Patterns.Lambda(parameters, body) -> 
+            toAiql body
         | PipePattern expr -> toAiql expr
         | Quotations.Patterns.Let (arg, body, remaining) ->
             match body with

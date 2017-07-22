@@ -9,9 +9,11 @@ open Newtonsoft.Json
 open ExpressionBuilder.Expression
 open System.Web
 
+type ApplicationInsightsBase() = class end
 
-type ApplicationInsightsBase (address:string, apiKey:string) =
-    static member QueryData ([<ReflectedDefinition>] q: Quotations.Expr<#ApplicationInsightsBase -> _>) =
+type ApplicationInsightsBase<'T> () =
+    inherit ApplicationInsightsBase()
+    static member QueryData (address, apiKey, [<ReflectedDefinition>] q: Quotations.Expr<'T -> _>) =
         
         let query = 
             match q with 
@@ -21,7 +23,7 @@ type ApplicationInsightsBase (address:string, apiKey:string) =
 
         async {
             use client = new HttpClient()
-            client.DefaultRequestHeaders.Add("x-api-key",apiKey)
+            client.DefaultRequestHeaders.Add("x-api-key",sprintf "%s" apiKey)
             let! result = 
                 client.GetAsync(sprintf "%s/query?query=%s" address (HttpUtility.UrlEncode query))
                 |> Async.AwaitTask
@@ -79,8 +81,6 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
 
         let tableData = JsonConvert.DeserializeObject<TableResult>(result)
         let tableType = ProvidedTypeDefinition(asm, ns, typeName,  Some typeof<AzureQueryTypeProvider.ApplicationInsightsBase>)
-        let firstLetterToUpper (s:string) =
-            sprintf "%c%s" (Char.ToUpper(s.[0])) (s.Substring(1,s.Length-1))
             
         let tableTypes = 
             tableData.Tables
@@ -88,12 +88,17 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
             |> Seq.map(fun x -> x.[0], x.[1], Type.GetType( x.[2]))
             |> Seq.groupBy (fun (tableName, _, _) -> tableName )
             |> Seq.map(fun (key, grp) -> 
-                let myType = ProvidedTypeDefinition(firstLetterToUpper key,  Some typeof<AzureQueryTypeProvider.SourceStream>)
+                let myType = ProvidedTypeDefinition(key,  Some typeof<AzureQueryTypeProvider.SourceStream>)
                 for (_, columnName, columnType) in grp do 
-                    myType.AddMember <| ProvidedProperty(firstLetterToUpper columnName, columnType, GetterCode = (fun args -> <@@ NotImplementedException "" |> raise @@>))
+                    myType.AddMember <| ProvidedProperty(columnName, columnType, GetterCode = (fun args -> <@@ NotImplementedException "" |> raise @@>))
                 myType
+
             )
             |> Seq.toList
+
+        // adding static member QueryData (expr:Quotations.Expr<Trace -> 'a>):'a
+        //let queryDataMethod = ProvidedMethod(methodName = "QueryData", parameters  = [], returnType = typeof<obj>)
+        //queryDataMethod
             
         for typedef in tableTypes do 
             tableType.AddMember typedef
