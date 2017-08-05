@@ -48,22 +48,7 @@ open System.Reflection
 open System.Net.Http
 open Newtonsoft.Json
 open ExpressionBuilder.Expression
-
-type ColumnDefinition = {
-    ColumnName: string
-    DataType: string
-    ColumnType: string
-}
-
-type TableData = {
-    TableName: string
-    Columns: ColumnDefinition[]
-    Rows: string[][]
-}
-
-type TableResult = {
-   Tables : TableData[] 
-}
+open AiqlContract
 
 [<TypeProvider>]
 type AiqlTypeProvider (config : TypeProviderConfig) as this =
@@ -120,7 +105,6 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
                     createTypes typeName address apiKey
             | _ -> failwith "unexpected parameter values")) 
                 
-
     do this.AddNamespace(ns, [mainType])
 
 [<assembly:TypeProviderAssembly>]

@@ -2,9 +2,7 @@
 
 open Xunit
 open Xunit.Abstractions
-//open FsUnit
 open System.Net.Http
-//open Newtonsoft.Json
 open System.Web
 open System
 open ExpressionBuilder.Expression
@@ -18,9 +16,8 @@ module Tests =
     type Trace= 
         abstract timestamp : DateTime
         abstract operation_name : string
-
         //static member QueryData (expr:Quotations.Expr<Trace -> 'a>):'a
-
+    
 
     type Tables =
         abstract requests : Requests[]

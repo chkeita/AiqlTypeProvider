@@ -82,6 +82,11 @@
     <Reference Include="System.Web" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\AiqlContract\AiqlContract.fsproj">
+      <Name>AiqlContract</Name>
+      <Project>{0961f2f5-4f9f-48a7-ab62-7c3ce4cda205}</Project>
+      <Private>True</Private>
+    </ProjectReference>
     <ProjectReference Include="..\ExpressionBuilder\ExpressionBuilder.fsproj">
       <Name>ExpressionBuilder</Name>
       <Project>{e9efb143-1136-41db-b386-11a49f7ceff9}</Project>
