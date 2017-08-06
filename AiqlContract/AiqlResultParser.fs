@@ -91,23 +91,16 @@ module ResultParer =
         | r -> 
             failwith (sprintf "Unexpected format %O" r.TokenType)
 
-    let readResults<'T> (reader:JsonTextReader) = 
-        match reader with
-        | JsonSequence [(JsonToken.None, None); (JsonToken.StartObject, None); (JsonToken.PropertyName, Some( box "Tables") )] _ ->
-            readTableData<'T> reader
-        | tokenType -> 
-            failwith (sprintf "Unexpected format %O" tokenType)
+    let readResults<'T> (stream:Stream) = 
+        seq {
+            use streamReader = new System.IO.StreamReader(stream)
+            use jsonReader =  new JsonTextReader(streamReader)
 
-
-    type ResultReader(stream:Stream) =
-        let streamReader = new System.IO.StreamReader(stream)
-        let jsonReader =  new JsonTextReader(streamReader)
-
-        member this.ReadResults<'T> () =
-            readResults<'T> jsonReader
-
-        interface IDisposable with
-            member this.Dispose() =
-                jsonReader.Close()
-                stream.Dispose()
+            match jsonReader with
+            | JsonSequence [(JsonToken.None, None); (JsonToken.StartObject, None); (JsonToken.PropertyName, Some( box "Tables") )] _ ->
+                for row in readTableData<'T> jsonReader do
+                    yield row
+            | tokenType -> 
+                failwith (sprintf "Unexpected format %O" tokenType)
+        }
             

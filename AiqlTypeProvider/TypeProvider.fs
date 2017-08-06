@@ -8,19 +8,14 @@ open System.Net.Http
 open Newtonsoft.Json
 open ExpressionBuilder.Expression
 open System.Web
+open AiqlContract.ResultParer
 
 type ApplicationInsightsBase() = class end
 
-type ApplicationInsightsBase<'T> () =
-    inherit ApplicationInsightsBase()
-    static member QueryData (address, apiKey, [<ReflectedDefinition>] q: Quotations.Expr<'T -> _>) =
+type ApplicationInsightsContext (address:string, apiKey:string) =
+    member this.QueryData<'T> ([<ReflectedDefinition>] q: Quotations.Expr<seq<'T>>) =
         
-        let query = 
-            match q with 
-            | Quotations.Patterns.Lambda (vars, body) -> 
-                ExpressionBuilder.Expression.toAiql body
-            | _ -> failwith (sprintf "Unexpected query: %O" q)
-
+        let query = ExpressionBuilder.Expression.toAiql q
         async {
             use client = new HttpClient()
             client.DefaultRequestHeaders.Add("x-api-key",sprintf "%s" apiKey)
@@ -28,17 +23,16 @@ type ApplicationInsightsBase<'T> () =
                 client.GetAsync(sprintf "%s/query?query=%s" address (HttpUtility.UrlEncode query))
                 |> Async.AwaitTask
 
-            let! resultText = result.Content.ReadAsStringAsync() |> Async.AwaitTask
             if result.IsSuccessStatusCode then
-                return resultText
+                let! resultStream = result.Content.ReadAsStreamAsync() |> Async.AwaitTask
+                return readResults(resultStream)
             else
+                let! resultText = result.Content.ReadAsStringAsync() |> Async.AwaitTask
                 return failwith (sprintf "Failed query, Status code: %d;\n%s" (int result.StatusCode) resultText)
 
         }
 
 type SourceStream = class end
-
-
 namespace AiqlTypeProvider
 
 open ProviderImplementation.ProvidedTypes
@@ -66,7 +60,6 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
 
         let tableData = JsonConvert.DeserializeObject<TableResult>(result)
         let tableType = ProvidedTypeDefinition(asm, ns, typeName,  Some typeof<AzureQueryTypeProvider.ApplicationInsightsBase>)
-            
         let tableTypes = 
             tableData.Tables
             |> Seq.collect(fun x -> x.Rows)
@@ -82,12 +75,17 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
             |> Seq.toList
 
         // adding static member QueryData (expr:Quotations.Expr<Trace -> 'a>):'a
-        //let queryDataMethod = ProvidedMethod(methodName = "QueryData", parameters  = [], returnType = typeof<obj>)
+        let contextProperty = ProvidedProperty(
+                                propertyName = "Context", 
+                                propertyType = typeof<AzureQueryTypeProvider.ApplicationInsightsContext>,
+                                GetterCode = (fun _ -> <@@ AzureQueryTypeProvider.ApplicationInsightsContext(%%(Quotations.Expr.Value address), %%(Quotations.Expr.Value key))  @@> ),
+                                IsStatic = true)
         //queryDataMethod
-            
-        for typedef in tableTypes do 
+        tableType.AddMember contextProperty
+        for typedef in tableTypes do
+            let seqOfType = typeof<seq<_>>.GetGenericTypeDefinition().MakeGenericType(typedef)
             tableType.AddMember typedef
-            tableType.AddMember <| ProvidedProperty(typedef.Name, typedef, GetterCode = (fun args -> <@@ getTable<_> %(Quotations.Expr.Value(typedef.Name.ToLowerInvariant()) |> Quotations.Expr.Cast) @@>), IsStatic = true)
+            tableType.AddMember <| ProvidedProperty(typedef.Name, seqOfType, GetterCode = (fun args -> <@@ getTable<_> %(Quotations.Expr.Value(typedef.Name.ToLowerInvariant()) |> Quotations.Expr.Cast) @@>), IsStatic = true)
         
         tableType
 

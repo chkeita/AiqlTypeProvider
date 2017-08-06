@@ -50,12 +50,6 @@ type Request () =
 module ResultParserTest = 
     open Newtonsoft.Json.Linq
 
-    let readData<'T> filePath = 
-        use fileStream = System.IO.File.OpenRead filePath
-        use streamReader = new System.IO.StreamReader(fileStream)
-        use jsonReader =  new JsonTextReader(streamReader)
-        readResults<'T> jsonReader
-
     [<Fact>]
     let canParseResult () = 
         let expected = 
@@ -77,8 +71,8 @@ module ResultParserTest =
              )
         let filePath = "sampleAiqlResult.json"
         use fileStream = System.IO.File.OpenRead filePath
-        use resultReader = new ResultReader(fileStream)
-        let actual = resultReader.ReadResults<Request>() |> Seq.toArray |> JArray.FromObject
+        let resultSequence = readResults<Request>(fileStream)
+        let actual = resultSequence |> Seq.toArray |> JArray.FromObject
         Assert.Equal<JArray>(expected,actual)
 
 

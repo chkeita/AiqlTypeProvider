@@ -19,8 +19,9 @@ module Tests =
         //static member QueryData (expr:Quotations.Expr<Trace -> 'a>):'a
     
 
-    type Tables =
-        abstract requests : Requests[]
+    type Tables () =
+        //abstract requests : Requests[]
+        static member requests = Unchecked.defaultof<Requests[]>
 
     type ExpressionTest(output:ITestOutputHelper) = 
             let sendQuery (query:string) = 
@@ -70,8 +71,8 @@ module Tests =
             [<Fact>]
             let whereExprLetLambda () = 
                 <@
-                    fun (tables:Tables) -> 
+                    //fun (tables:Tables) -> 
                         let x = 1
-                        tables.requests |> where (fun s -> s.resultCode = x)
+                        Tables.requests |> where (fun s -> s.resultCode = x)
                 @>
                 |> testQuery
