@@ -22,7 +22,7 @@ module Tests =
     type Tables () =
         //abstract requests : Requests[]
         static member requests = Unchecked.defaultof<Requests[]>
-
+        
     type ExpressionTest(output:ITestOutputHelper) = 
             let sendQuery (query:string) = 
                 async{
@@ -53,14 +53,14 @@ module Tests =
             }
            
             [<Fact>]
-            let whereExpr () = 
+            member x.whereExpr () = 
                 <@
                     getTable<Requests[]> "requests" |> where (fun x -> x.resultCode = 1)
                 @>
                 |> testQuery
 
             [<Fact>]
-            let whereExprLet () = 
+            member x.whereExprLet () = 
                 <@
                     let x = 1
                     getTable<Requests[]> "requests" |> where (fun s -> s.resultCode = x)
@@ -69,7 +69,7 @@ module Tests =
 
 
             [<Fact>]
-            let whereExprLetLambda () = 
+            member x.whereExprLetLambda () = 
                 <@
                     //fun (tables:Tables) -> 
                         let x = 1

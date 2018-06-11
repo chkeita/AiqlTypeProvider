@@ -9,6 +9,8 @@ module Expression =
     let getTable<'T> (tableName:String) : 'T = new NotImplementedException () |> raise
     let where<'elemType,'seqType when 'seqType :> seq<'elemType>>  ([<ReflectedDefinition>] predicate:'elemType -> bool ) (query:'seqType) : Quotations.Expr<'seqType> = new NotImplementedException () |> raise
     let count<'elemType,'seqType when 'seqType :> seq<'elemType>> (query:Quotations.Expr<'seqType>) : Quotations.Expr<'seqType> = new NotImplementedException () |> raise
+    let take<'elemType> (size: int) (query:seq<'elemType>) : seq<'elemType> = new NotImplementedException () |> raise
+
 
     let (|PipePattern|_|) = function
         | Quotations.DerivedPatterns.SpecificCall 
@@ -71,6 +73,15 @@ module Expression =
                     sprintf "%s | where (%s / %s)" (toAiql queryExpression) (toAiql left) (toAiql right)
                 | exp -> notSupported exp
             | exp -> notSupported exp
+        | Quotations.DerivedPatterns.SpecificCall <@ take @> (_,_ ,limitArgs) ->
+            match limitArgs with
+            | [Quotations.Patterns.Value (v,t); queryExpression ] ->
+                sprintf "%s | limit %O" (toAiql queryExpression) v
+            | exp -> notSupported exp
+            
+
+        | Quotations.Patterns.Coerce  (exp,returnType) -> 
+            toAiql exp
         | exp -> notSupported exp
 
 

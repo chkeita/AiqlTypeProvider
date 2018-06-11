@@ -71,7 +71,7 @@ module ResultParserTest =
              )
         let filePath = "sampleAiqlResult.json"
         use fileStream = System.IO.File.OpenRead filePath
-        let resultSequence = readResults<Request>(fileStream)
+        let resultSequence = readResultsTyped<Request>(fileStream)
         let actual = resultSequence |> Seq.toArray |> JArray.FromObject
         Assert.Equal<JArray>(expected,actual)
 
