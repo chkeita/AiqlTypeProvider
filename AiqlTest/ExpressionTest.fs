@@ -9,70 +9,79 @@ open ExpressionBuilder.Expression
 
 type Result<'T> = OK of 'T | Error of string
 
-type Requests =
-    abstract resultCode:int
+type Requests() =
+    member val resultCode = 0 with get,set
+    member val test = 0 with get,set
 
 module Tests =
+
     type Trace= 
         abstract timestamp : DateTime
         abstract operation_name : string
-        //static member QueryData (expr:Quotations.Expr<Trace -> 'a>):'a
-    
 
     type Tables () =
-        //abstract requests : Requests[]
         static member requests = Unchecked.defaultof<Requests[]>
+
+
         
-    type ExpressionTest(output:ITestOutputHelper) = 
-            let sendQuery (query:string) = 
-                async{
+    type ExpressionTest(output:ITestOutputHelper) =
+
+            member x.sendQuery<'T> q = 
+                async {
+                    let query = toAiql q
                     sprintf "sending Query: %s" query
                     |> output.WriteLine 
-                    use client = new HttpClient()
-                    client.DefaultRequestHeaders.Add("x-api-key","DEMO_KEY")
-                    let! result = 
-                        client.GetAsync(sprintf "https://api.applicationinsights.io/beta/apps/DEMO_APP/query?query=%s" (HttpUtility.UrlEncode query))
-                        |> Async.AwaitTask
-
-                    let! r = result.Content.ReadAsStringAsync() |> Async.AwaitTask
-                    if result.IsSuccessStatusCode then
-                        return OK r
-                    else 
-                        return Error r
+                    return! ExpressionBuilder.ResultParer.sendRequest<'T>("https://api.applicationinsights.io/v1/apps/DEMO_APP", "DEMO_KEY") query
                 }
-
-            let testQuery q = async {
-                let! r = 
-                        q
-                        |> toAiql
-                        |> sendQuery
-
-                match r with 
-                | OK _ -> ()
-                | Error mes -> Exception mes |> raise
-            }
+                |> Async.RunSynchronously
+            
            
             [<Fact>]
             member x.whereExpr () = 
                 <@
-                    getTable<Requests[]> "requests" |> where (fun x -> x.resultCode = 1)
+                    Tables.requests |> where (fun x -> x.resultCode = 1)
                 @>
-                |> testQuery
+                |> x.sendQuery<Requests>
+                
 
             [<Fact>]
             member x.whereExprLet () = 
                 <@
                     let x = 1
-                    getTable<Requests[]> "requests" |> where (fun s -> s.resultCode = x)
+                    Tables.requests |> where (fun s -> s.resultCode = x)
                 @>
-                |> testQuery
+                |> x.sendQuery<Requests>
 
 
             [<Fact>]
             member x.whereExprLetLambda () = 
                 <@
-                    //fun (tables:Tables) -> 
-                        let x = 1
-                        Tables.requests |> where (fun s -> s.resultCode = x)
+                    let x = 1
+                    Tables.requests |> where (fun s -> s.resultCode = x)
                 @>
-                |> testQuery
+                |> x.sendQuery<Requests>
+
+            [<Fact>]
+            member x.takeExpression () = 
+                let req = 
+                    <@
+                        Tables.requests |> take 10
+                    @>
+                    |> x.sendQuery<Requests>
+                Xunit.Assert.Equal(10, req |> Seq.length)
+                
+
+            //[<Fact>]
+            //member x.orderByExpression () = 
+            //    <@
+            //        Tables.requests |> orderBy (fun x -> x.resultCode)
+            //    @>
+            //    |> x.sendQuery<Requests>
+
+
+            //[<Fact>]
+            //member x.projectExpression () = 
+            //    <@
+            //        Tables.requests |> project (fun x -> x.resultCode, x.test)
+            //    @>
+            //    |> x.sendQuery<Requests>

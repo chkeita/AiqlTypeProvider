@@ -1,4 +1,4 @@
-﻿namespace AiqlContract
+﻿namespace ExpressionBuilder
 
 module ResultParer = 
     open Newtonsoft.Json
@@ -6,13 +6,15 @@ module ResultParer =
     open Microsoft.FSharp.Reflection
     open System
     open System.IO
-
+    open System.Net.Http
+    open System.Web
+    open Contact
     
     /// match the provided JsoonTokenreader to the expectedtoken sequence
     /// the first token is matched without calling read on on the sequence
     /// the reader will only advance if there is at least two elements in the sequence
     let (|JsonSequence|_|) expectedTokenSequence (reader:JsonTextReader) =
-        let isMatch (tokenType, tokenValue) = (reader.TokenType = tokenType) && (match tokenValue with | Some v -> reader.Value = v | None -> true )
+        let isMatch (tokenType, tokenValue) = (reader.TokenType = tokenType) && (match tokenValue with | Some v -> reader.Value.ToString().Equals(v, StringComparison.OrdinalIgnoreCase) | None -> true )
         let rec matchSeq  = 
             function
             | [h] when isMatch h -> Some () 
@@ -26,18 +28,17 @@ module ResultParer =
         matchSeq expectedTokenSequence
     
     
-    let readRows(typ:Type, colDefs:ColumnDefinition[], reader:JsonTextReader)= 
+    let readRows<'T>(colDefs:ColumnDefinition[], reader:JsonTextReader)= 
+        let typ = typeof<'T> 
         match reader with 
         | JsonSequence [(JsonToken.StartArray, None); (JsonToken.StartArray, None)] _ ->  
-            let length = colDefs |> Array.length
-            let serializer = JsonSerializer()
             let createInstance () =
                 if typ.IsClass then 
-                    let ob = System.Activator.CreateInstance(typ)
+                    let ob = System.Activator.CreateInstance<'T>()
                     let mutable count = 0
                     while reader.TokenType <> JsonToken.EndArray do
                         //let prop = typ.GetProperty(colDefs.[count].ColumnName, BindingFlags.Public ||| BindingFlags.Instance)
-                        let prop = typ.GetRuntimeProperty(colDefs.[count].ColumnName)
+                        let prop = typ.GetRuntimeProperty(colDefs.[count].Name)
                         if null <> prop && prop.CanWrite then
                             prop.SetValue(ob, Convert.ChangeType(reader.Value, prop.PropertyType))
                         count <- count+1
@@ -64,47 +65,76 @@ module ResultParer =
         | r -> 
                 failwith (sprintf "Unexpected format %O" r.TokenType)
 
-    let readColumnMetadata(typ:Type, reader:JsonTextReader) =
+    let readColumnMetadata<'T>(reader:JsonTextReader) =
         match reader with
-        | JsonSequence [ (JsonToken.PropertyName, Some( box "Columns") ) ; (JsonToken.StartArray, None ) ] _ ->
+        | JsonSequence [ (JsonToken.PropertyName, Some("Columns") ) ; (JsonToken.StartArray, None ) ] _ ->
             let serializer = JsonSerializer()
+            
             let colDefs = serializer.Deserialize<ColumnDefinition[]>(reader)
             match reader with 
-            | JsonSequence [(JsonToken.EndArray, None); (JsonToken.PropertyName, Some (box "Rows")); (JsonToken.StartArray, None)] _ ->
-                readRows(typ, colDefs, reader)
+            | JsonSequence [(JsonToken.EndArray, None); (JsonToken.PropertyName, Some ("Rows")); (JsonToken.StartArray, None)] _ ->
+                readRows<'T>(colDefs, reader)
             | r -> 
                 failwith (sprintf "Unexpected format %O" r.TokenType)
         | r -> 
             failwith (sprintf "Unexpected format %O" r.TokenType)
         
-    let readTableData(typ:Type, reader:JsonTextReader) =
+    let readTableData<'T>(reader:JsonTextReader) =
         match reader with
-        | JsonSequence [(JsonToken.PropertyName, Some( box "Tables") ); (JsonToken.StartArray, None); (JsonToken.StartObject, None)] _ -> 
+        | JsonSequence [(JsonToken.PropertyName, Some( "Tables") ); (JsonToken.StartArray, None); (JsonToken.StartObject, None)] _ -> 
             reader.Read() |> ignore
             // skipping to the column defiition
-            while ( reader.Value.ToString() <> "Columns") do
+            while ( not <| reader.Value.ToString().Equals("Columns", StringComparison.OrdinalIgnoreCase)) do
                 reader.Read() |> ignore
-            let columnDefs = readColumnMetadata(typ, reader)
+            let columnDefs = readColumnMetadata<'T>(reader)
             columnDefs 
         | r -> 
             failwith (sprintf "Unexpected format %O" r.TokenType)
 
-    let readResults(typ:Type, stream:Stream) = 
+    let readResults<'T>(stream:Stream) = 
         seq {
             use streamReader = new System.IO.StreamReader(stream)
             use jsonReader =  new JsonTextReader(streamReader)
 
             match jsonReader with
-            | JsonSequence [(JsonToken.None, None); (JsonToken.StartObject, None); (JsonToken.PropertyName, Some( box "Tables") )] _ ->
-                for row in readTableData(typ, jsonReader) do
+            | JsonSequence [(JsonToken.None, None); (JsonToken.StartObject, None); (JsonToken.PropertyName, Some( "Tables") )] _ ->
+                for row in readTableData<'T>(jsonReader) do
                     yield row
             | tokenType -> 
                 failwith (sprintf "Unexpected format %O" tokenType)
         }
 
-    let readResultsTyped<'T> (stream:Stream) : seq<'T> = 
-        seq {
-            for row in readResults(typeof<'T>, stream) do
-                yield row :?> 'T
+    let createClient (address:string, apiKey:string) = 
+        let client = new HttpClient(BaseAddress = Uri address)
+        client.DefaultRequestHeaders.Add("x-api-key",sprintf "%s" apiKey)
+        client
+
+    let getSchema (address:string, apiKey:string) =
+        async {
+            use client = createClient (address, apiKey)
+            let! result = client.GetAsync(sprintf "%s/query/schema" address) |> Async.AwaitTask
+            if result.IsSuccessStatusCode then
+                let! str = result.Content.ReadAsStringAsync() |> Async.AwaitTask
+                let tableData = JsonConvert.DeserializeObject<TableDefnitions>(str)
+                return tableData
+            else
+                let! resultText = result.Content.ReadAsStringAsync() |> Async.AwaitTask
+                return failwith (sprintf "Failed query, Status code: %d;\n%s" (int result.StatusCode) resultText)
         }
+
+    let sendRequest<'T> (address:string, apiKey:string) (request:string) =
+        async {
+            use client = createClient (address, apiKey)
+            let! result = 
+                client.GetAsync(sprintf "%s/query?query=%s" address (HttpUtility.UrlEncode request))
+                |> Async.AwaitTask
+
+            if result.IsSuccessStatusCode then
+                let! resultStream = result.Content.ReadAsStreamAsync() |> Async.AwaitTask
+                return readResults<'T>(resultStream)
+            else
+                let! resultText = result.Content.ReadAsStringAsync() |> Async.AwaitTask
+                return failwith (sprintf "Failed query, Status code: %d;\n%s" (int result.StatusCode) resultText)
+        }
+
             

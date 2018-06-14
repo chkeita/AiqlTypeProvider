@@ -54,15 +54,12 @@
     <None Include="Scripts\load-references-debug.fsx" />
     <None Include="Scripts\load-project-debug.fsx" />
     <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="AssemblyReader.fs" />
-    <Compile Include="AssemblyReaderReflection.fs" />
     <Content Include="packages.config" />
     <Compile Include="ProvidedTypes.fsi" />
     <Compile Include="ProvidedTypes.fs" />
     <Compile Include="TypeProvider.fs" />
     <None Include="Script.fsx" />
     <Compile Include="ProvidedTypesTesting.fs" />
-    <Compile Include="ProvidedTypesContext.fs" />
     <Compile Include="AiqlExpression.fs" />
   </ItemGroup>
   <ItemGroup>
@@ -88,11 +85,6 @@
     <Reference Include="System.Web" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\AiqlContract\AiqlContract.fsproj">
-      <Name>AiqlContract</Name>
-      <Project>{0961f2f5-4f9f-48a7-ab62-7c3ce4cda205}</Project>
-      <Private>True</Private>
-    </ProjectReference>
     <ProjectReference Include="..\ExpressionBuilder\ExpressionBuilder.fsproj">
       <Name>ExpressionBuilder</Name>
       <Project>{e9efb143-1136-41db-b386-11a49f7ceff9}</Project>

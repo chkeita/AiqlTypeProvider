@@ -64,11 +64,6 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\AiqlContract\AiqlContract.fsproj">
-      <Name>AiqlContract</Name>
-      <Project>{0961f2f5-4f9f-48a7-ab62-7c3ce4cda205}</Project>
-      <Private>True</Private>
-    </ProjectReference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core">
       <Name>FSharp.Core</Name>
