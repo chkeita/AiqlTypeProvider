@@ -11,7 +11,13 @@ type Result<'T> = OK of 'T | Error of string
 
 type Requests() =
     member val resultCode = 0 with get,set
-    member val test = 0 with get,set
+    //member val test = 0 with get,set
+    override x.ToString() = sprintf "resultCode = %d" x.resultCode
+
+type TestRecord = {
+        ResultCode: int
+        TestField: string
+    }
 
 module Tests =
 
@@ -22,18 +28,21 @@ module Tests =
     type Tables () =
         static member requests = Unchecked.defaultof<Requests[]>
 
-
-        
     type ExpressionTest(output:ITestOutputHelper) =
 
             member x.sendQuery<'T> q = 
-                async {
-                    let query = toAiql q
-                    sprintf "sending Query: %s" query
-                    |> output.WriteLine 
-                    return! ExpressionBuilder.ResultParer.sendRequest<'T>("https://api.applicationinsights.io/v1/apps/DEMO_APP", "DEMO_KEY") query
-                }
-                |> Async.RunSynchronously
+                let result = 
+                    async {
+                        let query = toAiql q
+                        sprintf "sending Query: %s" query
+                        |> output.WriteLine 
+                        return! ExpressionBuilder.ResultParer.sendRequest<'T>("https://api.applicationinsights.io/v1/apps/DEMO_APP", "DEMO_KEY") query
+                    }
+                    |> Async.RunSynchronously
+                    |> Seq.toList
+
+                output.WriteLine(sprintf "query result:\n [%s]" (result |> Seq.map (sprintf "%O") |> String.concat ";"))
+                result
             
            
             [<Fact>]
@@ -69,6 +78,20 @@ module Tests =
                     @>
                     |> x.sendQuery<Requests>
                 Xunit.Assert.Equal(10, req |> Seq.length)
+
+            [<Fact>]
+            member x.``Project- mapping to record intialized in the same order as the defnition`` () = 
+                <@
+                    Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" })
+                @>
+                |> x.sendQuery<Requests>
+
+            [<Fact>]
+            member x.``Project- mapping to record intialized in an order different from the defnition`` () = 
+                <@
+                    Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})
+                @>
+                |> x.sendQuery<Requests>
                 
 
             //[<Fact>]

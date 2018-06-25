@@ -9,6 +9,8 @@ module ResultParer =
     open System.Net.Http
     open System.Web
     open Contact
+
+    let serializer = JsonSerializer()
     
     /// match the provided JsoonTokenreader to the expectedtoken sequence
     /// the first token is matched without calling read on on the sequence
@@ -27,30 +29,50 @@ module ResultParer =
         
         matchSeq expectedTokenSequence
     
-    
     let readRows<'T>(colDefs:ColumnDefinition[], reader:JsonTextReader)= 
         let typ = typeof<'T> 
-        match reader with 
-        | JsonSequence [(JsonToken.StartArray, None); (JsonToken.StartArray, None)] _ ->  
+        let propertyMap = 
+            lazy
+                if typ.IsClass then 
+                    typ.GetRuntimeProperties()
+                    |> Seq.map(fun prop -> prop.Name, prop)
+                    |> Map.ofSeq
+                else
+                    failwith "not supported yet"
+
+            
+        match reader with
+        | JsonSequence [(JsonToken.PropertyName, Some ("Rows"));(JsonToken.StartArray, None)] _ ->  
             let createInstance () =
                 if typ.IsClass then 
                     let ob = System.Activator.CreateInstance<'T>()
                     let mutable count = 0
                     while reader.TokenType <> JsonToken.EndArray do
-                        //let prop = typ.GetProperty(colDefs.[count].ColumnName, BindingFlags.Public ||| BindingFlags.Instance)
-                        let prop = typ.GetRuntimeProperty(colDefs.[count].Name)
-                        if null <> prop && prop.CanWrite then
+                        match propertyMap.Value.TryFind colDefs.[count].Name with
+                        | Some prop when prop.CanWrite -> 
                             prop.SetValue(ob, Convert.ChangeType(reader.Value, prop.PropertyType))
+                        | _ -> ()
                         count <- count+1
                         reader.Read() |> ignore
                     reader.Read() |> ignore
                     ob
                 elif FSharpType.IsRecord typ then
-                    failwith "record type not supported yet"
+                    //let fields = FSharpType.GetRecordFields typ
+                    FSharpValue.MakeRecord(typ, serializer.Deserialize<obj[]> reader ) :?> 'T
+                    // :> 
+
+                    // note: we need to read all the field values in an array, in the same order
+                    // as the fields in the FSharpType.GetRecordFields array
+                    // possible optimisation  is to make sure that when the query returns a record
+                    // the corresponding AIQL query should list the property in the expected order
+                    
+                    //failwith "record type not supported yet"
                 else
                     failwithf "type '%s' not supported yet" typ.Name
                 
-    
+            // skipping the start of the array
+            reader.Read() |> ignore
+
             let tryReadRow () = 
                 match reader with 
                 | JsonSequence [(JsonToken.StartArray, None) ] _ ->
@@ -62,20 +84,26 @@ module ResultParer =
             Seq.initInfinite(fun _ -> tryReadRow ())
             |> Seq.takeWhile Option.isSome
             |> Seq.map Option.get
+
         | r -> 
                 failwith (sprintf "Unexpected format %O" r.TokenType)
 
     let readColumnMetadata<'T>(reader:JsonTextReader) =
         match reader with
         | JsonSequence [ (JsonToken.PropertyName, Some("Columns") ) ; (JsonToken.StartArray, None ) ] _ ->
-            let serializer = JsonSerializer()
             
-            let colDefs = serializer.Deserialize<ColumnDefinition[]>(reader)
-            match reader with 
-            | JsonSequence [(JsonToken.EndArray, None); (JsonToken.PropertyName, Some ("Rows")); (JsonToken.StartArray, None)] _ ->
-                readRows<'T>(colDefs, reader)
-            | r -> 
-                failwith (sprintf "Unexpected format %O" r.TokenType)
+            let colDefs = serializer.Deserialize<ColumnDefinition[]> reader
+
+            if reader.TokenType = JsonToken.EndArray then 
+                reader.Read() |> ignore
+
+            colDefs
+
+            //match reader with 
+            //| JsonSequence [(JsonToken.PropertyName, Some ("Rows")); (JsonToken.StartArray, None)] _ ->
+            
+            //| r -> 
+            //    failwith (sprintf "Unexpected format %O" r.TokenType)
         | r -> 
             failwith (sprintf "Unexpected format %O" r.TokenType)
         
@@ -87,7 +115,9 @@ module ResultParer =
             while ( not <| reader.Value.ToString().Equals("Columns", StringComparison.OrdinalIgnoreCase)) do
                 reader.Read() |> ignore
             let columnDefs = readColumnMetadata<'T>(reader)
-            columnDefs 
+            readRows<'T>(columnDefs, reader)
+
+             
         | r -> 
             failwith (sprintf "Unexpected format %O" r.TokenType)
 
@@ -125,8 +155,10 @@ module ResultParer =
     let sendRequest<'T> (address:string, apiKey:string) (request:string) =
         async {
             use client = createClient (address, apiKey)
+            let request = sprintf "%s/query?query=%s" address (HttpUtility.UrlEncode request)
+
             let! result = 
-                client.GetAsync(sprintf "%s/query?query=%s" address (HttpUtility.UrlEncode request))
+                client.GetAsync(request)
                 |> Async.AwaitTask
 
             if result.IsSuccessStatusCode then

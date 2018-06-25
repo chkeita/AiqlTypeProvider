@@ -3,6 +3,7 @@
 /// Translation of F# quotation to aiql 
 module Expression =
     open System
+    open Microsoft.FSharp.Reflection
 
     let notSupported x = new NotSupportedException(sprintf "%O" x) |> raise
     
@@ -77,15 +78,18 @@ module Expression =
             toAiql body
         | PipePattern expr -> toAiql expr
         | Quotations.Patterns.Let (arg, body, remaining) ->
-            sprintf "let %s = %s;\n%s" arg.Name (bodyExpression body) (toAiql remaining)
-        | Quotations.Patterns.Value (v,t) -> v.ToString()
+            sprintf "let %s = %s;\n%s" arg.Name (toAiql body) (toAiql remaining)
+        | Quotations.Patterns.Value (v,t) ->
+            match v with 
+            | :? string -> sprintf "\"%O\""  v
+            | _ -> sprintf "%O" v
         | Quotations.Patterns.PropertyGet (obj, propertyInfo, _) -> propertyInfo.Name
         | Quotations.Patterns.Var vr -> vr.Name
         | Quotations.DerivedPatterns.SpecificCall <@ getTable @> (_,_, [Quotations.Patterns.Value (v,t)]) -> v.ToString()
         | Quotations.DerivedPatterns.SpecificCall <@ where @> (_,_ ,whereArgs) -> 
             match whereArgs with
             | [Quotations.Patterns.Lambda (arg,body);queryExpression ] ->
-                sprintf "%s | where (%s)" (toAiql queryExpression) (bodyExpression body)
+                sprintf "%s | where (%s)" (toAiql queryExpression) (toAiql body)
             | exp -> notSupported exp
         | Quotations.DerivedPatterns.SpecificCall <@ take @> (_,_ ,takeArgs) ->
             match takeArgs with
@@ -107,13 +111,15 @@ module Expression =
         | Quotations.DerivedPatterns.SpecificCall <@ orderBy @> (_,_ ,orderByArgs) -> 
             match orderByArgs with
             | [Quotations.Patterns.Lambda (arg,body);queryExpression ] ->
-                sprintf "%s | sort by (%s)" (toAiql queryExpression) (bodyExpression body)
+                sprintf "%s | sort by (%s)" (toAiql queryExpression) (toAiql body)
+            | exp -> notSupported exp
+        | Quotations.DerivedPatterns.SpecificCall <@ project @> (_,_ ,projectArgs) -> 
+            match projectArgs with
+            | [Quotations.Patterns.Lambda (arg,body);queryExpression ] ->
+                sprintf "%s | project %s" (toAiql queryExpression) (toAiql body)
             | exp -> notSupported exp
         | Quotations.Patterns.Coerce  (exp,returnType) -> 
             toAiql exp
-        | exp -> notSupported exp
-    and bodyExpression = 
-        function
         | Quotations.DerivedPatterns.SpecificCall <@ (=) @> (_,_,[left;right]) ->
             sprintf "%s == %s" (toAiql left) (toAiql right)
         | Quotations.DerivedPatterns.SpecificCall <@ (+) @> (_,_,[left;right]) ->
@@ -130,5 +136,10 @@ module Expression =
             sprintf "%O" v
         | Quotations.DerivedPatterns.Lambdas ([vars], bd) ->
             sprintf "(%s) { %s }"(vars |> Seq.map (fun x -> sprintf "%s: %s"x.Name (getAiqlType x.Type)) |> String.concat ",") (toAiql bd)
-        | Quotations.Patterns.PropertyGet (obj, propertyInfo, _) -> propertyInfo.Name
+        | Quotations.Patterns.NewRecord (typ, exprs) ->
+            let fields = FSharpType.GetRecordFields typ
+            Seq.zip fields exprs
+            |> Seq.map (fun (f,exp) -> sprintf "%s = (%s)"f.Name (toAiql exp))
+            |> String.concat ","
+
         | exp -> notSupported exp
