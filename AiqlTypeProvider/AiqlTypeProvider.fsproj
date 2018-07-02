@@ -60,7 +60,6 @@
     <Compile Include="TypeProvider.fs" />
     <None Include="Script.fsx" />
     <Compile Include="ProvidedTypesTesting.fs" />
-    <Compile Include="AiqlExpression.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />

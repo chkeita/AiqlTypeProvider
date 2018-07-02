@@ -4,6 +4,8 @@
 module Expression =
     open System
     open Microsoft.FSharp.Reflection
+    open System.Linq.Expressions
+    open System.Linq.Expressions
 
     let notSupported x = new NotSupportedException(sprintf "%O" x) |> raise
 
@@ -73,11 +75,8 @@ module Expression =
     /// Converts a query expression to an aiql query
     let rec toAiql =
         function
-        | Quotations.Patterns.Lambda(parameters, body) ->
-            toAiql body
         | PipePattern expr -> toAiql expr
-        | Quotations.Patterns.Let (arg, body, remaining) ->
-            sprintf "let %s = %s;\n%s" arg.Name (toAiql body) (toAiql remaining)
+        
         | Quotations.Patterns.Value (v,t) ->
             match v with
             | :? string -> sprintf "\"%O\""  v
@@ -88,7 +87,7 @@ module Expression =
         | Quotations.DerivedPatterns.SpecificCall <@ where @> (_,_ ,whereArgs) ->
             match whereArgs with
             | [Quotations.Patterns.Lambda (arg,body);queryExpression ] ->
-                sprintf "%s | where (%s)" (toAiql queryExpression) (toAiql body)
+                sprintf "%s | where %s" (toAiql queryExpression) (toAiql body)
             | exp -> notSupported exp
         | Quotations.DerivedPatterns.SpecificCall <@ take @> (_,_ ,takeArgs) ->
             match takeArgs with
@@ -110,7 +109,7 @@ module Expression =
         | Quotations.DerivedPatterns.SpecificCall <@ orderBy @> (_,_ ,orderByArgs) ->
             match orderByArgs with
             | [Quotations.Patterns.Lambda (arg,body);queryExpression ] ->
-                sprintf "%s | sort by (%s)" (toAiql queryExpression) (toAiql body)
+                sprintf "%s | sort by %s" (toAiql queryExpression) (toAiql body)
             | exp -> notSupported exp
         | Quotations.DerivedPatterns.SpecificCall <@ project @> (_,_ ,projectArgs) ->
             match projectArgs with
@@ -134,14 +133,22 @@ module Expression =
         | Quotations.Patterns.Value (v,t) ->
             sprintf "%O" v
         | Quotations.DerivedPatterns.Lambdas ([vars], bd) ->
-            sprintf "(%s) { %s }"(vars |> Seq.map (fun x -> sprintf "%s: %s"x.Name (getAiqlType x.Type)) |> String.concat ",") (toAiql bd)
-        | Quotations.Patterns.NewRecord (typ, exprs) ->
+            sprintf "(%s) { %s }"(vars |> Seq.map (fun x -> sprintf "%s:%s"x.Name (getAiqlType x.Type)) |> String.concat ", ") (toAiql bd)
+        | RecorCreationPattern (typ, args, exprs) ->
             let fields = FSharpType.GetRecordFields typ
             Seq.zip fields exprs
-            |> Seq.map (fun (f,exp) -> sprintf "%s = (%s)"f.Name (toAiql exp))
-            |> String.concat ","
-        // | RecorCreationPattern (typ, args, exprs) ->
-        //     let fields = FSharpType.GetRecordFields typ
-        //     ""
-
+            |> Seq.map (
+                function
+                | (f,Quotations.Patterns.Var vr) ->
+                    let value = 
+                        args.TryFind vr.Name
+                        |> Option.defaultValue (Quotations.Expr.Var vr)
+                    sprintf "%s = %s"f.Name (toAiql value)
+                | (f,exp) -> sprintf "%s = %s"f.Name (toAiql exp)
+                )
+            |> String.concat ", "
+        | Quotations.Patterns.Let (arg, body, remaining) ->
+            sprintf "let %s = %s;\n%s" arg.Name (toAiql body) (toAiql remaining)
+        | Quotations.DerivedPatterns.Applications (Quotations.Patterns.Var v, [tupleArgs]) ->
+            sprintf "%s(%s)" v.Name (tupleArgs |> Seq.map toAiql |> String.concat ", " )
         | exp -> notSupported exp
