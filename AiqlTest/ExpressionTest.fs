@@ -2,73 +2,221 @@
 
 open Xunit
 open Xunit.Abstractions
-//open FsUnit
 open System.Net.Http
-//open Newtonsoft.Json
 open System.Web
 open System
 open ExpressionBuilder.Expression
 
 type Result<'T> = OK of 'T | Error of string
 
-type Requests = {
-    resultCode:int
-}
+type Requests() =
+    member val resultCode = 0 with get,set
+    override x.ToString() = sprintf "resultCode = %d" x.resultCode
 
-module Tests = 
+type TestRecord = {
+        ResultCode: int
+        TestField: string
+    }
 
+module Tests =
+    open ExpressionBuilder
+
+    type Trace= 
+        abstract timestamp : DateTime
+        abstract operation_name : string
+
+    type Tables () =
+        static member requests = Unchecked.defaultof<Requests[]>
+
+    let ``Tables.requests |> where (fun x -> x.resultCode = 1)`` =
+        [
+            AiqlExpression( 
+                TabularExpression(
+                    Table "requests", 
+                    Where, 
+                    BinaryOperation( 
+                        PropertyGet "resultCode", 
+                        ConstantExpression 1, 
+                        Equal  
+                    ) 
+                )
+            ) 
+        ]
+
+    let ``let x = 1; Tables.requests |> where (fun s -> s.resultCode = x)`` =
+        [
+            LetBinding("x", ConstantExpression 1)
+            AiqlExpression( 
+                TabularExpression(
+                    Table "requests", 
+                    Where, 
+                    BinaryOperation( 
+                        PropertyGet "resultCode", 
+                        Var "x", 
+                        Equal  
+                    ) 
+                )
+            ) 
+        ]
+
+    let ``let add (x,y) = x+y; Tables.requests |> where (fun s -> s.resultCode = add(1,2))``=
+        [
+            LetBinding(
+                "add", 
+                Lambda(
+                    [| "x", AiqlType.Int; "y", AiqlType.Int |],
+                    BinaryOperation(Var "x", Var "y",Plus) 
+                )
+            )
+            AiqlExpression( 
+                TabularExpression(
+                    Table "requests", 
+                    Where, 
+                    BinaryOperation( 
+                        PropertyGet "resultCode", 
+                        FunctionAppliation (
+                            "add", 
+                            [ConstantExpression 1; ConstantExpression 2]), 
+                        Equal  
+                    ) 
+                )
+            ) 
+        ]
+
+    let ``Tables.requests |> take 10`` =
+        [
+            AiqlExpression( 
+                TabularExpression(
+                    Table "requests", 
+                    Take, 
+                    ConstantExpression 10
+                )
+            ) 
+        ]
+
+    let ``Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" })`` =
+        [
+            AiqlExpression( 
+                TabularExpression(
+                    Table "requests", 
+                    Project,
+                    PropPertyList
+                        [
+                            "ResultCode", PropertyGet "resultCode"
+                            "TestField", ConstantExpression ""
+                        ]
+                )
+            ) 
+        ]
+
+    let ``Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})``=
+        [
+            AiqlExpression( 
+                TabularExpression(
+                    Table "requests", 
+                    Project,
+                    PropPertyList
+                        [
+                            "ResultCode", PropertyGet "resultCode"
+                            "TestField", ConstantExpression ""
+                        ]
+                )
+            ) 
+        ]
+
+    type ExpressionBuildingTest(output:ITestOutputHelper) =
     
-    type ExpressionTest(output:ITestOutputHelper) = 
-            let sendQuery (query:string) = 
-                async{
-                    sprintf "sending Query: %s" query
-                    |> output.WriteLine 
-                    use client = new HttpClient()
-                    client.DefaultRequestHeaders.Add("x-api-key","DEMO_KEY")
-                    let! result = 
-                        client.GetAsync(sprintf "https://api.applicationinsights.io/beta/apps/DEMO_APP/query?query=%s" (HttpUtility.UrlEncode query))
-                        |> Async.AwaitTask
+        let assertAiql (expected:#seq<AiqlStatement>) (actual) =
+            let query = 
+                actual
+                |> Expression.toAiqlQuery 
+            Assert.Equal(expected, query)
 
-                    let! r = result.Content.ReadAsStringAsync() |> Async.AwaitTask
-                    if result.IsSuccessStatusCode then
-                        return OK r
-                    else 
-                        return Error r
-                }
+        [<Fact>]
+        member x.whereExpr () =
+            <@
+                Tables.requests |> where (fun x -> x.resultCode = 1)
+            @>
+            |> assertAiql ``Tables.requests |> where (fun x -> x.resultCode = 1)``
 
-            let testQuery q = async {
-                let! r = 
-                        q
-                        |> toAiql
-                        |> sendQuery
+        [<Fact>]
+        member x.whereExprLet () = 
+            <@
+                let x = 1
+                Tables.requests |> where (fun s -> s.resultCode = x)
+            @>
+            |> assertAiql ``let x = 1; Tables.requests |> where (fun s -> s.resultCode = x)``
 
-                match r with 
-                | OK _ -> ()
-                | Error mes -> Exception mes |> raise
-            }
-           
-            [<Fact>]
-            let whereExpr () = 
-                <@
-                    getTable<Requests[]> "requests" |> where (fun x -> x.resultCode = 1)
-                @>
-                |> testQuery
-
-            [<Fact>]
-            let whereExprLet () = 
-                <@
-                    let x = 1
-                    getTable<Requests[]> "requests" |> where (fun s -> s.resultCode = x)
-                @>
-                |> testQuery
-
+        [<Fact>]
+        member x.whereExprLetLambda () = 
+            <@
+                let add (x,y) = x+y
+                Tables.requests |> where (fun s -> s.resultCode = add(1,2))
+            @>
+            |> assertAiql ``let add (x,y) = x+y; Tables.requests |> where (fun s -> s.resultCode = add(1,2))``
             
 
-
-                
+        [<Fact>]
+        member x.takeExpression () = 
+            <@
+                Tables.requests |> take 10
+            @>
+            |> assertAiql ``Tables.requests |> take 10``
+            
+        [<Fact>]
+        member x.``Project- mapping to record intialized in the same order as the defnition`` () = 
+            <@
+                Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" })
+            @>
+            |> assertAiql ``Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" })``
         
+        [<Fact>]
+        member x.``Project- mapping to record intialized in an order different from the defnition`` () = 
+            <@
+                Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})
+            @>
 
-
-
+            |> assertAiql ``Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})``
 
     
+    type ExpressionWriterTest(output:ITestOutputHelper) =
+        let assertAiql expected actual =
+            let query = 
+                actual
+                |> ExpressionWriter.fromAiqlQuery
+            sprintf "sending Query: %s" query
+            |> output.WriteLine 
+            Assert.Equal(expected, query, System.StringComparer.OrdinalIgnoreCase)
+
+        [<Fact>]
+        member x.whereExpr () =
+            ``Tables.requests |> where (fun x -> x.resultCode = 1)``
+            |> assertAiql "requests | where resultCode == 1"
+
+        [<Fact>]
+        member x.whereExprLet () = 
+            ``let x = 1; Tables.requests |> where (fun s -> s.resultCode = x)``
+            |> assertAiql "let x = 1;\nrequests | where resultCode == x"
+
+        [<Fact>]
+        member x.whereExprLetLambda () = 
+            ``let add (x,y) = x+y; Tables.requests |> where (fun s -> s.resultCode = add(1,2))``
+            |> assertAiql "let add = (x:int, y:int) { x + y };\nrequests | where resultCode == add(1, 2)"
+
+        [<Fact>]
+        member x.takeExpression () = 
+            ``Tables.requests |> take 10``
+            |> assertAiql "requests | take 10"
+
+        [<Fact>]
+        member x.``Project- mapping to record intialized in the same order as the defnition`` () = 
+            ``Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" })``
+            |> assertAiql "requests | project ResultCode = resultCode, TestField = \"\""
+
+        [<Fact>]
+        member x.``Project- mapping to record intialized in an order different from the defnition`` () = 
+            ``Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})``
+            |> assertAiql "requests | project ResultCode = resultCode, TestField = \"\""
+                
+
+        

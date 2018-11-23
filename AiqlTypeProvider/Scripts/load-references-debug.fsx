@@ -8,3 +8,5 @@
 #r "System.Numerics.dll"
 #r "../../packages/System.ValueTuple.4.3.0/lib/netstandard1.0/System.ValueTuple.dll"
 #r "../../ExpressionBuilder/bin/Debug/ExpressionBuilder.dll"
+#r "../../AiqlContract/bin/Debug/AiqlContract.dll"
+#r "System.Web.dll"

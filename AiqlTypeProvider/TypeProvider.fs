@@ -1,58 +1,105 @@
 ﻿namespace AiqlTypeProvider
 
-open ProviderImplementation.ProvidedTypes
+open Microsoft.FSharp
+
 open Microsoft.FSharp.Core.CompilerServices
 open System
-open System.Reflection
-open System.Net.Http
-open Newtonsoft.Json
+open ExpressionBuilder
+open ExpressionBuilder.Expression
+open ExpressionBuilder.ResultParer
+open ProviderImplementation.ProvidedTypes
+open ProviderImplementation.ProvidedTypes.UncheckedQuotations
 
-type ColumnDefinition = {
-    ColumnName: string
-    DataType: string
-    ColumnType: string
-}
+type ApplicationInsightsBase() = class end
 
-type TableData = {
-    TableName: string
-    Columns: ColumnDefinition[]
-    Rows: string[][]
-}
-
-type TableResult = {
-   Tables : TableData[] 
-}
+type ApplicationInsightsContext (address:string, apiKey:string) =
+    member this.QueryData<'T> ([<ReflectedDefinition>] q: Quotations.Expr<seq<'T>>) : Async<seq<'T>> =
+        q
+        |> Expression.toAiqlQuery 
+        |> ExpressionWriter.fromAiqlQuery
+        |> sendRequest (address, apiKey)
+       
+type SourceStream() = 
+    class end
 
 [<TypeProvider>]
 type AiqlTypeProvider (config : TypeProviderConfig) as this =
-    inherit TypeProviderForNamespaces ()
+    inherit TypeProviderForNamespaces (config)
 
-    let ns = "Sample.AiqlTypeProvider"
-    let asm = Assembly.GetExecutingAssembly()
+    let ns = "AzureQueryTypeProvider"
 
-    let createTypes () =
-        use client = new HttpClient()
-        client.DefaultRequestHeaders.Add("x-api-key","DEMO_KEY")
-        let result = 
-            client.GetAsync("https://api.applicationinsights.io/beta/apps/DEMO_APP/query/schema").Result.Content.ReadAsStringAsync().Result
+    let asm = ProvidedAssembly()
 
-        let tableData = JsonConvert.DeserializeObject<TableResult>(result)
-    
-        tableData.Tables
-        |> Seq.collect(fun x -> x.Rows)
-        |> Seq.map(fun x -> x.[0], x.[1], Type.GetType( x.[2]))
-        |> Seq.groupBy (fun (tableName, _, _) -> tableName )
-        |> Seq.map(fun (key, grp) -> 
-                            let myType = ProvidedTypeDefinition(asm, ns, key,  Some typeof<obj>)
-                            grp
-                            |> Seq.iter (fun (_, columnName, columnType) -> myType.AddMember <| ProvidedProperty(columnName, columnType, IsStatic = true))
-                            System.Diagnostics.Trace.WriteLine(sprintf "adding type %s" key)
-                            myType
-                            )
-        |> Seq.toList
-                                    
+    let mainType = ProvidedTypeDefinition(asm, ns, "ApplicationInsights",  Some typeof<ApplicationInsightsBase>, isErased=false)
+    let createTypes typeName (address:string) (key:string) =
+        let tableData = getSchema (address, key) |> Async.RunSynchronously
+        let tableType = ProvidedTypeDefinition(asm, ns, typeName,  Some typeof<ApplicationInsightsBase>, isErased=false)
+        let convertType = 
+            function
+            | "timestamp"
+            | "ingestionTime" -> typeof<DateTimeOffset>
+            | ty -> Type.GetType ty
 
-    do this.AddNamespace(ns, createTypes())
+        let tableTypes = 
+            tableData.Tables
+            |> Seq.collect(fun x -> x.Rows)
+            |> Seq.map(fun x -> x.[0], x.[1], x.[2] ,  convertType( x.[2]))
+            |> Seq.groupBy (fun (tableName, _, _, _) -> tableName )
+            |> Seq.map(fun (key, grp) -> 
+                let myType = ProvidedTypeDefinition(key, Some typeof<SourceStream>, isErased=false)
+                myType.AddMember <|  ProvidedConstructor([], invokeCode = fun _ -> <@@ () @@>)
+                for (_, columnName, typeName, columnType) in grp do 
+                    if isNull columnType then 
+                        failwithf "Unknown column type: %s" typeName
+                    let field = ProvidedField("_" + columnName, columnType)
+                    myType.AddMember field
+                    myType.AddMember( 
+                        ProvidedProperty(
+                            columnName, 
+                            columnType,
+                            getterCode = 
+                                (fun args -> Quotations.Expr.FieldGetUnchecked(args.[0], field)),
+                            setterCode = 
+                                (fun args -> Quotations.Expr.FieldSetUnchecked(args.[0], field, args.[1])))
+                        )
+                    
+                myType
+
+            )
+            |> Seq.toList
+
+        let contextProperty = ProvidedProperty(
+                                propertyName = "Context", 
+                                propertyType = typeof<ApplicationInsightsContext>,
+                                getterCode = (fun _ -> <@@ ApplicationInsightsContext(%%(Quotations.Expr.Value address), %%(Quotations.Expr.Value key))  @@> ),
+                                isStatic = true)
+        
+        
+        tableType.AddMember contextProperty
+        for typedef in tableTypes do
+            let seqOfType = typeof<seq<_>>.GetGenericTypeDefinition().MakeGenericType(typedef)
+            tableType.AddMember typedef
+            tableType.AddMember <| ProvidedProperty(typedef.Name, seqOfType, getterCode = (fun args -> <@@ getTable<_> %(Quotations.Expr.Value(typedef.Name.ToLowerInvariant()) |> Quotations.Expr.Cast) @@>), isStatic = true)
+        
+        asm.AddTypes ([mainType;tableType])
+        
+        tableType
+
+    let staticParams = [ProvidedStaticParameter("address", typeof<string>); ProvidedStaticParameter("api_key", typeof<string>)]
+        
+    do mainType.DefineStaticParameters(
+        parameters=staticParams,
+        instantiationFunction=(fun typeName ->
+            function 
+            | [| :? string as address; :? string as apiKey |] -> 
+                match (address,apiKey) with
+                | ("demo",_) | (_,"demo") -> 
+                    createTypes typeName "https://api.applicationinsights.io/V1/apps/DEMO_APP" "DEMO_KEY"
+                | _ -> 
+                    createTypes typeName address apiKey
+            | _ -> failwith "unexpected parameter values")) 
+                
+    do this.AddNamespace(ns, [mainType])
 
 [<assembly:TypeProviderAssembly>]
 do ()
