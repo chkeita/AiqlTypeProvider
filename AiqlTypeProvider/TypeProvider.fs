@@ -4,6 +4,7 @@ open Microsoft.FSharp
 
 open Microsoft.FSharp.Core.CompilerServices
 open System
+open ExpressionBuilder
 open ExpressionBuilder.Expression
 open ExpressionBuilder.ResultParer
 open ProviderImplementation.ProvidedTypes
@@ -13,8 +14,10 @@ type ApplicationInsightsBase() = class end
 
 type ApplicationInsightsContext (address:string, apiKey:string) =
     member this.QueryData<'T> ([<ReflectedDefinition>] q: Quotations.Expr<seq<'T>>) : Async<seq<'T>> =
-        let query = ExpressionBuilder.Expression.toAiql q
-        sendRequest (address, apiKey) query
+        q
+        |> Expression.toAiqlQuery 
+        |> ExpressionWriter.fromAiqlQuery
+        |> sendRequest (address, apiKey)
        
 type SourceStream() = 
     class end

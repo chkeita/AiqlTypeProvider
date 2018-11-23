@@ -55,6 +55,7 @@
     <Compile Include="Contract.fs" />
     <Compile Include="AiqlResultParser.fs" />
     <Compile Include="ExpressionBuilder.fs" />
+    <Compile Include="ExpressionWriter.fs" />
     <None Include="Script.fsx" />
     <Content Include="packages.config" />
   </ItemGroup>

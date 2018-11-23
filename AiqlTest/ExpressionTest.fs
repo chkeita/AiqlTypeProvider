@@ -20,6 +20,7 @@ type TestRecord = {
     }
 
 module Tests =
+    open ExpressionBuilder
 
     type Trace= 
         abstract timestamp : DateTime
@@ -31,15 +32,21 @@ module Tests =
     type ExpressionTest(output:ITestOutputHelper) =
     
         let assertAiql expected actual =
-            let query = toAiql actual
+            let query = 
+                actual
+                |> Expression.toAiqlQuery 
+                |> ExpressionWriter.fromAiqlQuery
             sprintf "sending Query: %s" query
             |> output.WriteLine 
-            Assert.Equal(expected, query)
+            Assert.Equal(expected, query, System.StringComparer.OrdinalIgnoreCase)
 
         member x.sendQuery<'T> q = 
             let result = 
                 async {
-                    let query = toAiql q
+                    let query =
+                        q
+                        |> Expression.toAiqlQuery 
+                        |> ExpressionWriter.fromAiqlQuery
                     sprintf "sending Query: %s" query
                     |> output.WriteLine 
                     return! ExpressionBuilder.ResultParer.sendRequest<'T>("https://api.applicationinsights.io/v1/apps/DEMO_APP", "DEMO_KEY") query
