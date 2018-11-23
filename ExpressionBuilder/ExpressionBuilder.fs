@@ -36,7 +36,7 @@ module Expression =
     | Project
 
     and AiqlExpressionBody =
-    | ConstantExpression of value:string
+    | ConstantExpression of value:obj
     | BinaryOperation of left:AiqlExpressionBody*right:AiqlExpressionBody*operator:AiqlScalarOperator
     | AiqlExpression of AiqlExpression
     | PropertyGet of string
@@ -144,19 +144,19 @@ module Expression =
         | Quotations.DerivedPatterns.SpecificCall <@ take @> (_,_ ,takeArgs) ->
             match takeArgs with
             | [Quotations.Patterns.Value (v,t); queryExpression ] ->
-                AiqlExpression.TabularExpression  (toAiqlExpression queryExpression, AiqlTabularOperator.Take, (AiqlExpressionBody.ConstantExpression (v.ToString()) ))
+                AiqlExpression.TabularExpression  (toAiqlExpression queryExpression, AiqlTabularOperator.Take, (AiqlExpressionBody.ConstantExpression v ))
             | exp -> notSupported exp
 
         | Quotations.DerivedPatterns.SpecificCall <@ top @> (_,_ ,topArgs) ->
             match topArgs with
             | [Quotations.Patterns.Value (v,t); queryExpression ] ->
-                AiqlExpression.TabularExpression  (toAiqlExpression queryExpression, AiqlTabularOperator.Top, (AiqlExpressionBody.ConstantExpression (v.ToString()) ))
+                AiqlExpression.TabularExpression  (toAiqlExpression queryExpression, AiqlTabularOperator.Top, (AiqlExpressionBody.ConstantExpression v ))
             | exp -> notSupported exp
 
         | Quotations.DerivedPatterns.SpecificCall <@ limit @> (_,_ ,limitArgs) ->
             match limitArgs with
             | [Quotations.Patterns.Value (v,t); queryExpression ] ->
-                AiqlExpression.TabularExpression  (toAiqlExpression queryExpression, AiqlTabularOperator.Limit, (AiqlExpressionBody.ConstantExpression (v.ToString()) ))
+                AiqlExpression.TabularExpression  (toAiqlExpression queryExpression, AiqlTabularOperator.Limit, (AiqlExpressionBody.ConstantExpression v))
                 
             | exp -> notSupported exp
         | Quotations.DerivedPatterns.SpecificCall <@ orderBy @> (_,_ ,orderByArgs) ->
@@ -180,10 +180,7 @@ module Expression =
     and toBodyExpr =
         function
         | Quotations.Patterns.Value (v,t) ->
-            match v with
-            | :? string -> sprintf "\"%O\""  v
-            | _ -> sprintf "%O" v
-            |> AiqlExpressionBody.ConstantExpression
+            AiqlExpressionBody.ConstantExpression v
 
         | Quotations.Patterns.Var vr -> 
             AiqlExpressionBody.Var vr.Name
@@ -209,9 +206,8 @@ module Expression =
         | Quotations.DerivedPatterns.SpecificCall <@ (||) @> (_,_,[left;right]) ->
             AiqlExpressionBody.BinaryOperation(toBodyExpr left, toBodyExpr right, AiqlScalarOperator.Or)
 
-        | Quotations.Patterns.Value (v,t) ->
-            sprintf "%O" v
-            |> AiqlExpressionBody.ConstantExpression 
+        //| Quotations.Patterns.Value (v,t) ->
+        //    AiqlExpressionBody.ConstantExpression v
 
         | Quotations.DerivedPatterns.Lambdas ([vars], bd) ->
             let vars = vars |> Seq.map (fun x -> x.Name, (getAiqlType x.Type)) |> Seq.toArray

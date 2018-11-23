@@ -61,7 +61,10 @@ module ExpressionWriter =
 
     and fromAiqlExpressionBody =
         function
-        | AiqlExpressionBody.ConstantExpression c -> c
+        | AiqlExpressionBody.ConstantExpression v ->
+            match v with
+            | :? string -> sprintf "\"%O\""  v
+            | _ -> sprintf "%O" v
 
         | AiqlExpressionBody.Var v -> v
 

@@ -11,7 +11,6 @@ type Result<'T> = OK of 'T | Error of string
 
 type Requests() =
     member val resultCode = 0 with get,set
-    //member val test = 0 with get,set
     override x.ToString() = sprintf "resultCode = %d" x.resultCode
 
 type TestRecord = {
@@ -29,40 +28,116 @@ module Tests =
     type Tables () =
         static member requests = Unchecked.defaultof<Requests[]>
 
-    type ExpressionTest(output:ITestOutputHelper) =
+    let ``Tables.requests |> where (fun x -> x.resultCode = 1)`` =
+        [
+            AiqlExpression( 
+                TabularExpression(
+                    Table "requests", 
+                    Where, 
+                    BinaryOperation( 
+                        PropertyGet "resultCode", 
+                        ConstantExpression 1, 
+                        Equal  
+                    ) 
+                )
+            ) 
+        ]
+
+    let ``let x = 1; Tables.requests |> where (fun s -> s.resultCode = x)`` =
+        [
+            LetBinding("x", ConstantExpression 1)
+            AiqlExpression( 
+                TabularExpression(
+                    Table "requests", 
+                    Where, 
+                    BinaryOperation( 
+                        PropertyGet "resultCode", 
+                        Var "x", 
+                        Equal  
+                    ) 
+                )
+            ) 
+        ]
+
+    let ``let add (x,y) = x+y; Tables.requests |> where (fun s -> s.resultCode = add(1,2))``=
+        [
+            LetBinding(
+                "add", 
+                Lambda(
+                    [| "x", AiqlType.Int; "y", AiqlType.Int |],
+                    BinaryOperation(Var "x", Var "y",Plus) 
+                )
+            )
+            AiqlExpression( 
+                TabularExpression(
+                    Table "requests", 
+                    Where, 
+                    BinaryOperation( 
+                        PropertyGet "resultCode", 
+                        FunctionAppliation (
+                            "add", 
+                            [ConstantExpression 1; ConstantExpression 2]), 
+                        Equal  
+                    ) 
+                )
+            ) 
+        ]
+
+    let ``Tables.requests |> take 10`` =
+        [
+            AiqlExpression( 
+                TabularExpression(
+                    Table "requests", 
+                    Take, 
+                    ConstantExpression 10
+                )
+            ) 
+        ]
+
+    let ``Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" })`` =
+        [
+            AiqlExpression( 
+                TabularExpression(
+                    Table "requests", 
+                    Project,
+                    PropPertyList
+                        [
+                            "ResultCode", PropertyGet "resultCode"
+                            "TestField", ConstantExpression ""
+                        ]
+                )
+            ) 
+        ]
+
+    let ``Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})``=
+        [
+            AiqlExpression( 
+                TabularExpression(
+                    Table "requests", 
+                    Project,
+                    PropPertyList
+                        [
+                            "ResultCode", PropertyGet "resultCode"
+                            "TestField", ConstantExpression ""
+                        ]
+                )
+            ) 
+        ]
+
+    type ExpressionBuildingTest(output:ITestOutputHelper) =
     
-        let assertAiql expected actual =
+        let assertAiql (expected:#seq<AiqlStatement>) (actual) =
             let query = 
                 actual
                 |> Expression.toAiqlQuery 
-                |> ExpressionWriter.fromAiqlQuery
-            sprintf "sending Query: %s" query
-            |> output.WriteLine 
-            Assert.Equal(expected, query, System.StringComparer.OrdinalIgnoreCase)
+            Assert.Equal(expected, query)
 
-        member x.sendQuery<'T> q = 
-            let result = 
-                async {
-                    let query =
-                        q
-                        |> Expression.toAiqlQuery 
-                        |> ExpressionWriter.fromAiqlQuery
-                    sprintf "sending Query: %s" query
-                    |> output.WriteLine 
-                    return! ExpressionBuilder.ResultParer.sendRequest<'T>("https://api.applicationinsights.io/v1/apps/DEMO_APP", "DEMO_KEY") query
-                }
-                |> Async.RunSynchronously
-                |> Seq.toList
-
-            output.WriteLine(sprintf "query result:\n [%s]" (result |> Seq.map (sprintf "%O") |> String.concat ";"))
-            result
-           
         [<Fact>]
         member x.whereExpr () =
             <@
                 Tables.requests |> where (fun x -> x.resultCode = 1)
             @>
-            |> assertAiql "requests | where resultCode == 1"
+            |> assertAiql ``Tables.requests |> where (fun x -> x.resultCode = 1)``
 
         [<Fact>]
         member x.whereExprLet () = 
@@ -70,7 +145,7 @@ module Tests =
                 let x = 1
                 Tables.requests |> where (fun s -> s.resultCode = x)
             @>
-            |> assertAiql "let x = 1;\nrequests | where resultCode == x"
+            |> assertAiql ``let x = 1; Tables.requests |> where (fun s -> s.resultCode = x)``
 
         [<Fact>]
         member x.whereExprLetLambda () = 
@@ -78,41 +153,70 @@ module Tests =
                 let add (x,y) = x+y
                 Tables.requests |> where (fun s -> s.resultCode = add(1,2))
             @>
-            |> assertAiql "let add = (x:int, y:int) { x + y };\nrequests | where resultCode == add(1, 2)"
+            |> assertAiql ``let add (x,y) = x+y; Tables.requests |> where (fun s -> s.resultCode = add(1,2))``
+            
 
         [<Fact>]
         member x.takeExpression () = 
             <@
                 Tables.requests |> take 10
             @>
-            |> assertAiql "requests | take 10"
-
+            |> assertAiql ``Tables.requests |> take 10``
+            
         [<Fact>]
         member x.``Project- mapping to record intialized in the same order as the defnition`` () = 
             <@
                 Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" })
             @>
-            |> assertAiql "requests | project ResultCode = resultCode, TestField = \"\""
-
+            |> assertAiql ``Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" })``
+        
         [<Fact>]
         member x.``Project- mapping to record intialized in an order different from the defnition`` () = 
             <@
                 Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})
             @>
+
+            |> assertAiql ``Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})``
+
+    
+    type ExpressionWriterTest(output:ITestOutputHelper) =
+        let assertAiql expected actual =
+            let query = 
+                actual
+                |> ExpressionWriter.fromAiqlQuery
+            sprintf "sending Query: %s" query
+            |> output.WriteLine 
+            Assert.Equal(expected, query, System.StringComparer.OrdinalIgnoreCase)
+
+        [<Fact>]
+        member x.whereExpr () =
+            ``Tables.requests |> where (fun x -> x.resultCode = 1)``
+            |> assertAiql "requests | where resultCode == 1"
+
+        [<Fact>]
+        member x.whereExprLet () = 
+            ``let x = 1; Tables.requests |> where (fun s -> s.resultCode = x)``
+            |> assertAiql "let x = 1;\nrequests | where resultCode == x"
+
+        [<Fact>]
+        member x.whereExprLetLambda () = 
+            ``let add (x,y) = x+y; Tables.requests |> where (fun s -> s.resultCode = add(1,2))``
+            |> assertAiql "let add = (x:int, y:int) { x + y };\nrequests | where resultCode == add(1, 2)"
+
+        [<Fact>]
+        member x.takeExpression () = 
+            ``Tables.requests |> take 10``
+            |> assertAiql "requests | take 10"
+
+        [<Fact>]
+        member x.``Project- mapping to record intialized in the same order as the defnition`` () = 
+            ``Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" })``
+            |> assertAiql "requests | project ResultCode = resultCode, TestField = \"\""
+
+        [<Fact>]
+        member x.``Project- mapping to record intialized in an order different from the defnition`` () = 
+            ``Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})``
             |> assertAiql "requests | project ResultCode = resultCode, TestField = \"\""
                 
 
-            //[<Fact>]
-            //member x.orderByExpression () = 
-            //    <@
-            //        Tables.requests |> orderBy (fun x -> x.resultCode)
-            //    @>
-            //    |> x.sendQuery<Requests>
-
-
-            //[<Fact>]
-            //member x.projectExpression () = 
-            //    <@
-            //        Tables.requests |> project (fun x -> x.resultCode, x.test)
-            //    @>
-            //    |> x.sendQuery<Requests>
+        
