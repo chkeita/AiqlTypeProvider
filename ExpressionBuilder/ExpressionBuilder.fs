@@ -100,6 +100,24 @@ module Expression =
             | _ -> None
         isRecordCreation Map.empty expr
 
+    let (|MatchOpErator|_|) expr =
+        let operators =
+            [
+                <@@ (=) @@>, AiqlScalarOperator.Equal
+                <@@ (+) @@>, AiqlScalarOperator.Plus
+                <@@ (-) @@>, AiqlScalarOperator.Minus
+                <@@ (&&) @@>, AiqlScalarOperator.And
+                <@@ (||) @@>, AiqlScalarOperator.Or
+                <@@ (*) @@>, AiqlScalarOperator.Multiply
+            ]
+
+        operators
+        |> Seq.tryPick(
+            fun (fsharpOperator, aiqlOperator) ->
+                match expr with 
+                | Quotations.DerivedPatterns.SpecificCall fsharpOperator (_,_,[left;right]) -> Some (aiqlOperator, left, right)
+                | _ -> None)
+
     let dotNetTypeToAiqlMapping =
         [
             "System.Boolean", AiqlType.Bool
@@ -188,26 +206,8 @@ module Expression =
         | Quotations.Patterns.Coerce  (exp,returnType) ->
             toBodyExpr exp
 
-        | Quotations.DerivedPatterns.SpecificCall <@ (=) @> (_,_,[left;right]) ->
-            AiqlExpressionBody.BinaryOperation(toBodyExpr left, toBodyExpr right, AiqlScalarOperator.Equal)
-
-        | Quotations.DerivedPatterns.SpecificCall <@ (+) @> (_,_,[left;right]) ->
-            AiqlExpressionBody.BinaryOperation(toBodyExpr left, toBodyExpr right, AiqlScalarOperator.Plus)
-
-        | Quotations.DerivedPatterns.SpecificCall <@ (/) @> (_,_,[left;right]) ->
-            AiqlExpressionBody.BinaryOperation(toBodyExpr left, toBodyExpr right, AiqlScalarOperator.Divide)
-
-        | Quotations.DerivedPatterns.SpecificCall <@ (*) @> (_,_,[left;right]) ->
-            AiqlExpressionBody.BinaryOperation(toBodyExpr left, toBodyExpr right, AiqlScalarOperator.Multiply)
-
-        | Quotations.DerivedPatterns.SpecificCall <@ (&&) @> (_,_,[left;right]) ->
-            AiqlExpressionBody.BinaryOperation(toBodyExpr left, toBodyExpr right, AiqlScalarOperator.And)
-
-        | Quotations.DerivedPatterns.SpecificCall <@ (||) @> (_,_,[left;right]) ->
-            AiqlExpressionBody.BinaryOperation(toBodyExpr left, toBodyExpr right, AiqlScalarOperator.Or)
-
-        //| Quotations.Patterns.Value (v,t) ->
-        //    AiqlExpressionBody.ConstantExpression v
+        | MatchOpErator (aiqlOperator, left, right) ->
+            AiqlExpressionBody.BinaryOperation(toBodyExpr left, toBodyExpr right, aiqlOperator)
 
         | Quotations.DerivedPatterns.Lambdas ([vars], bd) ->
             let vars = vars |> Seq.map (fun x -> x.Name, (getAiqlType x.Type)) |> Seq.toArray
@@ -237,3 +237,4 @@ module Expression =
             AiqlExpressionBody.PropertyGet propertyInfo.Name
 
         | exp -> notSupported exp
+    
