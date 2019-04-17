@@ -1,0 +1,18 @@
+STORAGE: PACKAGES
+RESTRICTION: || (== net462) (== netstandard2.0)
+NUGET
+  remote: https://api.nuget.org/v3/index.json
+    FSharp.Core (4.6.2)
+    Microsoft.NETCore.Platforms (2.2) - restriction: || (== net462) (&& (== netstandard2.0) (>= net461))
+    NETStandard.Library (2.0.3) - restriction: || (== net462) (&& (== netstandard2.0) (>= net461))
+      Microsoft.NETCore.Platforms (>= 1.1)
+    NETStandard.Library.NETFramework (2.0.0-preview2-25405-01)
+      Microsoft.NETCore.Platforms (>= 2.0.0-preview2-25405-01) - restriction: || (== net462) (&& (== netstandard2.0) (>= net461))
+      NETStandard.Library (>= 2.0.0-preview2-25401-01) - restriction: || (== net462) (&& (== netstandard2.0) (>= net461))
+    Newtonsoft.Json (12.0.1)
+GITHUB
+  remote: fsprojects/FSharp.TypeProviders.SDK
+    src/ProvidedTypes.fs (c8fc89b0e8bac34e321372b004de76d600651cda)
+    src/ProvidedTypes.fsi (c8fc89b0e8bac34e321372b004de76d600651cda)
+GROUP Test
+

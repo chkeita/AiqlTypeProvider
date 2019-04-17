@@ -27,7 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ExpressionBuilder\ExpressionBuilder.fsproj" />
+    <ProjectReference Include="..\AiqlTypeProvider\AiqlTypeProvider.fsproj" />
   </ItemGroup>
 
 </Project>

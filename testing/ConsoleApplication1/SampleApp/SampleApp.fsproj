@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp2.1</TargetFramework>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
@@ -10,16 +10,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="AiqlTypeProvider" Version="1.0.0">
+      <NoWarn>NU1701</NoWarn>
+    </PackageReference>
     <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Reference Include="AiqlTypeProvider">
-      <HintPath>..\..\..\AiqlTypeProvider\bin\Debug\netstandard2.0\AiqlTypeProvider.dll</HintPath>
-    </Reference>
-    <Reference Include="ExpressionBuilder">
-      <HintPath>..\..\..\AiqlTypeProvider\bin\Debug\netstandard2.0\ExpressionBuilder.dll</HintPath>
-    </Reference>
   </ItemGroup>
 
 </Project>

@@ -1,23 +1,30 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
+    <NuspecFile>AiqlTypeProvider.nuspec</NuspecFile>
+    <PackageOutputPath>..\packages</PackageOutputPath>
   </PropertyGroup>
-
   <ItemGroup>
-    <Compile Include="ProvidedTypes.fsi" />
-    <Compile Include="ProvidedTypes.fs" />
+    <Compile Include="..\paket-files\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi" Link="ProvidedTypes.fsi" />
+    <Compile Include="..\paket-files\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fs" Link="ProvidedTypes.fs" />
+    <Compile Include="Contract.fs" />
+    <Compile Include="AiqlResultParser.fs" />
+    <Compile Include="ExpressionBuilder.fs" />
+    <Compile Include="ExpressionWriter.fs" />
     <Compile Include="ProvidedTypesTesting.fs" />
     <Compile Include="TypeProvider.fs" />
+    <None Include="AiqlTypeProvider.nuspec" />
+    <None Include="paket.references" />
+    <None Include="..\..\packages\NETStandard.Library.NETFramework\build\net461\lib\netstandard.dll" Condition="'$(TargetFramework)' == 'net45'">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
-
   <ItemGroup>
-    <PackageReference Include="FSharp.TypeProviders.StarterPack" Version="2.1.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
   </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\ExpressionBuilder\ExpressionBuilder.fsproj" />
-  </ItemGroup>
-
+  <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

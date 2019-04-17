@@ -3,6 +3,7 @@
 open System
 open AiqlTypeProvider
 
+
 type appinsight = AzureQueryTypeProvider.ApplicationInsights<address="demo", api_key="demo">
 
 [<EntryPoint>]
