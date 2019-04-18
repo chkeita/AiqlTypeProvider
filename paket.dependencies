@@ -1,0 +1,17 @@
+source https://api.nuget.org/v3/index.json
+storage: packages
+framework:  net462, netstandard20
+
+# Add the nuget packages you use here
+nuget FSharp.Core 4.6.2
+nuget Newtonsoft.Json 12.0.1
+
+nuget NETStandard.Library.NETFramework
+# nuget System.Text.Encoding.CodePages
+
+# THis lines are used by Paket to get the latest version of the Type Provider SDK files
+github fsprojects/FSharp.TypeProviders.SDK src/ProvidedTypes.fsi
+github fsprojects/FSharp.TypeProviders.SDK src/ProvidedTypes.fs
+
+
+group Test

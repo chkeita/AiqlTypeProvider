@@ -55,7 +55,7 @@ module ExpressionWriter =
     and fromAiqlExpression =
         function
         | AiqlExpression.TabularExpression (source, func, body) ->
-            sprintf "%s | %O %s" (fromAiqlExpression source) func (fromAiqlExpressionBody body)
+            sprintf "%s | %O %s" (fromAiqlExpression source) (getAiqlTabularOperator func) (fromAiqlExpressionBody body)
         | AiqlExpression.Table table ->
             table
 

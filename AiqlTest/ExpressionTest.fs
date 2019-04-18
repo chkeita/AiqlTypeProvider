@@ -164,14 +164,21 @@ module Tests =
             |> assertAiql ``Tables.requests |> take 10``
             
         [<Fact>]
-        member x.``Project- mapping to record intialized in the same order as the defnition`` () = 
+        member x.``Project - mapping to record intialized in the same order as the defnition`` () = 
             <@
                 Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" })
             @>
             |> assertAiql ``Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" })``
+
+        [<Fact>]
+        member x.``Project - mapping to anonymous record`` () = 
+            <@
+                Tables.requests |> project (fun r ->  {| ResultCode = r.resultCode; TestField = "" |})
+            @>
+            |> assertAiql ``Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" })``
         
         [<Fact>]
-        member x.``Project- mapping to record intialized in an order different from the defnition`` () = 
+        member x.``Project - mapping to record intialized in an order different from the defnition`` () = 
             <@
                 Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})
             @>
@@ -209,12 +216,12 @@ module Tests =
             |> assertAiql "requests | take 10"
 
         [<Fact>]
-        member x.``Project- mapping to record intialized in the same order as the defnition`` () = 
+        member x.``Project - mapping to record intialized in the same order as the defnition`` () = 
             ``Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" })``
             |> assertAiql "requests | project ResultCode = resultCode, TestField = \"\""
 
         [<Fact>]
-        member x.``Project- mapping to record intialized in an order different from the defnition`` () = 
+        member x.``Project - mapping to record intialized in an order different from the defnition`` () = 
             ``Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})``
             |> assertAiql "requests | project ResultCode = resultCode, TestField = \"\""
                 
