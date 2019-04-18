@@ -44,18 +44,42 @@ module ResultParer =
         match reader with
         | JsonSequence [(JsonToken.PropertyName, Some ("Rows"));(JsonToken.StartArray, None)] _ ->  
             let createInstance () =
-                if typ.IsClass then 
-                    let ob = System.Activator.CreateInstance<'T>()
-                    let mutable count = 0
-                    while reader.TokenType <> JsonToken.EndArray do
-                        match propertyMap.Value.TryFind colDefs.[count].Name with
-                        | Some prop when prop.CanWrite -> 
-                            prop.SetValue(ob, Convert.ChangeType(reader.Value, prop.PropertyType))
-                        | _ -> ()
-                        count <- count+1
+                if typ.IsClass then
+                    let lowestNumberOfConstructorParameter = 
+                        typ.GetConstructors()
+                        |> Seq.map (fun c -> c.GetParameters())
+                        |> Seq.sortBy (fun p -> p.Length)
+                        |> Seq.tryHead
+
+                    match lowestNumberOfConstructorParameter with 
+                    | Some [||] -> // the type has a parameter less constructor
+                        let ob = System.Activator.CreateInstance<'T>()
+                        let mutable count = 0
+                        while reader.TokenType <> JsonToken.EndArray do
+                            match propertyMap.Value.TryFind colDefs.[count].Name with
+                            | Some prop when prop.CanWrite -> 
+                                prop.SetValue(ob, Convert.ChangeType(reader.Value, prop.PropertyType))
+                            | _ -> ()
+                            count <- count+1
+                            reader.Read() |> ignore
                         reader.Read() |> ignore
-                    reader.Read() |> ignore
-                    ob
+                        ob
+                    | Some _ -> // could be an anounymous type
+                        let mutable count = 0
+                        
+                        let parameterValues = 
+                            seq {
+                                while reader.TokenType <> JsonToken.EndArray do
+                                    yield reader.Value
+                                    reader.Read() |> ignore
+                            }
+                            |> Seq.toArray
+                        let ob = System.Activator.CreateInstance(typ, parameterValues)
+                        reader.Read() |> ignore
+                        ob :?> 'T
+                    | None -> 
+                        failwith (sprintf "class with no constructors are not supported '%O'" typ)
+                        
                 elif FSharpType.IsRecord typ then
                     //let fields = FSharpType.GetRecordFields typ
                     FSharpValue.MakeRecord(typ, serializer.Deserialize<obj[]> reader ) :?> 'T
@@ -155,10 +179,10 @@ module ResultParer =
     let sendRequest<'T> (address:string, apiKey:string) (request:string) =
         async {
             use client = createClient (address, apiKey)
-            let request = sprintf "%s/query?query=%s" address (HttpUtility.UrlEncode request)
+            let request = sprintf "%s/query?query=%s" address (Uri.EscapeDataString request)
 
             let! result = 
-                client.GetAsync(request)
+                client.GetAsync request
                 |> Async.AwaitTask
 
             if result.IsSuccessStatusCode then

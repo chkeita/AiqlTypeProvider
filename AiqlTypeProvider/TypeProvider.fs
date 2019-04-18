@@ -24,8 +24,8 @@ type SourceStream() =
 
 [<TypeProvider>]
 type AiqlTypeProvider (config : TypeProviderConfig) as this =
-    inherit TypeProviderForNamespaces (config)
-
+    inherit TypeProviderForNamespaces (config, addDefaultProbingLocation=true)
+    
     let ns = "AzureQueryTypeProvider"
 
     let asm = ProvidedAssembly()
@@ -98,6 +98,8 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
                 | _ -> 
                     createTypes typeName address apiKey
             | _ -> failwith "unexpected parameter values")) 
+
+    
                 
     do this.AddNamespace(ns, [mainType])
 

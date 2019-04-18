@@ -43,7 +43,6 @@ module Contact =
        Tables : TableDefnition[] 
     }
 
-
     /// Definitions of a types returned by a query
     type ResultTableDefinition = {
         Name: string
