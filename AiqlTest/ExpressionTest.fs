@@ -11,6 +11,7 @@ type Result<'T> = OK of 'T | Error of string
 
 type Requests() =
     member val resultCode = 0 with get,set
+    member val name = "" with get,set
     override x.ToString() = sprintf "resultCode = %d" x.resultCode
 
 type TestRecord = {
@@ -32,10 +33,10 @@ module Tests =
         [
             AiqlExpression( 
                 TabularExpression(
-                    Table "requests", 
+                    [Table "requests"], 
                     Where, 
                     BinaryOperation( 
-                        PropertyGet "resultCode", 
+                        PropertyGet ("x", "resultCode"), 
                         ConstantExpression 1, 
                         Equal  
                     ) 
@@ -48,10 +49,10 @@ module Tests =
             LetBinding("x", ConstantExpression 1)
             AiqlExpression( 
                 TabularExpression(
-                    Table "requests", 
+                    [Table "requests"], 
                     Where, 
                     BinaryOperation( 
-                        PropertyGet "resultCode", 
+                        PropertyGet ("s", "resultCode"), 
                         Var "x", 
                         Equal  
                     ) 
@@ -70,10 +71,10 @@ module Tests =
             )
             AiqlExpression( 
                 TabularExpression(
-                    Table "requests", 
+                    [Table "requests"], 
                     Where, 
                     BinaryOperation( 
-                        PropertyGet "resultCode", 
+                        PropertyGet ("s", "resultCode"), 
                         FunctionAppliation (
                             "add", 
                             [ConstantExpression 1; ConstantExpression 2]), 
@@ -87,7 +88,7 @@ module Tests =
         [
             AiqlExpression( 
                 TabularExpression(
-                    Table "requests", 
+                    [Table "requests"], 
                     Take, 
                     ConstantExpression 10
                 )
@@ -98,11 +99,11 @@ module Tests =
         [
             AiqlExpression( 
                 TabularExpression(
-                    Table "requests", 
+                    [Table "requests"], 
                     Project,
                     PropPertyList
                         [
-                            "ResultCode", PropertyGet "resultCode"
+                            "ResultCode", PropertyGet ("r", "resultCode")
                             "TestField", ConstantExpression ""
                         ]
                 )
@@ -113,16 +114,32 @@ module Tests =
         [
             AiqlExpression( 
                 TabularExpression(
-                    Table "requests", 
+                    [Table "requests"], 
                     Project,
                     PropPertyList
                         [
-                            "ResultCode", PropertyGet "resultCode"
+                            "ResultCode", PropertyGet ("r", "resultCode")
                             "TestField", ConstantExpression ""
                         ]
                 )
             ) 
         ]
+
+    let ``Request | join (Request) ON  $left.name == $right.name`` =
+        [
+            AiqlExpression(
+                TabularExpression(
+                    [Table "requests"; Table "requests"],
+                    Join,
+                    BinaryOperation(
+                        PropertyGet ("$left","name"),
+                        PropertyGet ("$right","name"),
+                        Equal
+                    )
+                )
+            )
+        ]
+        
 
     type ExpressionBuildingTest(output:ITestOutputHelper) =
     
@@ -185,6 +202,14 @@ module Tests =
 
             |> assertAiql ``Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})``
 
+        [<Fact>]
+        member x.joinExpression() = 
+            <@ 
+                   (Tables.requests, Tables.requests)
+                   |> Expression.join( fun (left,right) -> left.name = right.name ) 
+            @>
+            |> assertAiql ``Request | join (Request) ON  $left.name == $right.name``
+
     
     type ExpressionWriterTest(output:ITestOutputHelper) =
         let assertAiql expected actual =
@@ -224,6 +249,11 @@ module Tests =
         member x.``Project - mapping to record intialized in an order different from the defnition`` () = 
             ``Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})``
             |> assertAiql "requests | project ResultCode = resultCode, TestField = \"\""
+
+        [<Fact>]
+        member x.joinExpression() = 
+            ``Request | join (Request) ON  $left.name == $right.name``
+            |> assertAiql "request | join (Request) ON  $left.name == $right.name"
                 
 
         

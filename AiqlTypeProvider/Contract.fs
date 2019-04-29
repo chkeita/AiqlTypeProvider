@@ -1,7 +1,7 @@
 ﻿namespace ExpressionBuilder
 
 /// Contains the types used to deserialized the result of an appinsight query 
-module Contact =
+module Contract =
     open System.Runtime.Serialization
 
     /// Contains the defnition of the columns from a table in appinsight

@@ -15,8 +15,8 @@
     <Compile Include="AiqlResultParser.fs" />
     <Compile Include="ExpressionBuilder.fs" />
     <Compile Include="ExpressionWriter.fs" />
-    <Compile Include="ProvidedTypesTesting.fs" />
     <Compile Include="TypeProvider.fs" />
+    <None Include="script\Script.fsx" />
     <None Include="AiqlTypeProvider.nuspec" />
     <None Include="paket.references" />
     <None Include="..\..\packages\NETStandard.Library.NETFramework\build\net461\lib\netstandard.dll" Condition="'$(TargetFramework)' == 'net45'">

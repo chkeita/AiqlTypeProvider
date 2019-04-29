@@ -27,7 +27,6 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
     inherit TypeProviderForNamespaces (config, addDefaultProbingLocation=true)
     
     let ns = "AzureQueryTypeProvider"
-
     let asm = ProvidedAssembly()
 
     let mainType = ProvidedTypeDefinition(asm, ns, "ApplicationInsights",  Some typeof<ApplicationInsightsBase>, isErased=false)
@@ -64,7 +63,6 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
                         )
                     
                 myType
-
             )
             |> Seq.toList
 
@@ -99,8 +97,6 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
                     createTypes typeName address apiKey
             | _ -> failwith "unexpected parameter values")) 
 
-    
-                
     do this.AddNamespace(ns, [mainType])
 
 [<assembly:TypeProviderAssembly>]

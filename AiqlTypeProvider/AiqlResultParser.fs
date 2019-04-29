@@ -7,8 +7,7 @@ module ResultParer =
     open System
     open System.IO
     open System.Net.Http
-    open System.Web
-    open Contact
+    open Contract
 
     let serializer = JsonSerializer()
     
@@ -40,7 +39,6 @@ module ResultParer =
                 else
                     failwith "not supported yet"
 
-            
         match reader with
         | JsonSequence [(JsonToken.PropertyName, Some ("Rows"));(JsonToken.StartArray, None)] _ ->  
             let createInstance () =
@@ -65,8 +63,6 @@ module ResultParer =
                         reader.Read() |> ignore
                         ob
                     | Some _ -> // could be an anounymous type
-                        let mutable count = 0
-                        
                         let parameterValues = 
                             seq {
                                 while reader.TokenType <> JsonToken.EndArray do
