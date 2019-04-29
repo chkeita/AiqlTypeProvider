@@ -253,7 +253,7 @@ module Tests =
         [<Fact>]
         member x.joinExpression() = 
             ``Request | join (Request) ON  $left.name == $right.name``
-            |> assertAiql "request | join (Request) ON  $left.name == $right.name"
+            |> assertAiql "requests | join (requests) ON  $left.name == $right.name"
                 
 
         

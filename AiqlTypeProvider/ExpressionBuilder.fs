@@ -77,14 +77,6 @@ module Expression =
                 
                     new NotImplementedException () |> raise
 
-    let join2<'leftEntity,'leftSeq,'rightEntity,'rightSeq 
-                when 'leftSeq :> seq<'leftEntity> 
-                and 'rightSeq :> seq<'rightEntity>>  
-                    ([<ReflectedDefinition>] predicate:JoinedEntity<'leftEntity,'rightEntity> -> bool ) 
-                    (left:'leftSeq, right:'rightSeq): JoinedEntity<'leftEntity,'rightEntity> = 
-    
-                    new NotImplementedException () |> raise
-
     let (|TupledArgMethodCallPattern|_|) expr =
         let rec isMethodCall args expr =
             match expr with

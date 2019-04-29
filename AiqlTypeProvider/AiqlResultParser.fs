@@ -8,27 +8,33 @@ module ResultParer =
     open System.IO
     open System.Net.Http
     open Contract
+    open FSharp.Control
 
     let serializer = JsonSerializer()
-    
-    /// match the provided JsoonTokenreader to the expectedtoken sequence
-    /// the first token is matched without calling read on on the sequence
-    /// the reader will only advance if there is at least two elements in the sequence
-    let (|JsonSequence|_|) expectedTokenSequence (reader:JsonTextReader) =
-        let isMatch (tokenType, tokenValue) = (reader.TokenType = tokenType) && (match tokenValue with | Some v -> reader.Value.ToString().Equals(v, StringComparison.OrdinalIgnoreCase) | None -> true )
-        let rec matchSeq  = 
-            function
-            | [h] when isMatch h -> Some () 
-            | h :: t when isMatch h -> 
-                    reader.Read() |> ignore
-                    matchSeq t    
-            
-            | [] -> Some ()
-            | _ -> None
-        
-        matchSeq expectedTokenSequence
-    
-    let readRows<'T>(colDefs:ColumnDefinition[], reader:JsonTextReader)= 
+
+    type JsonTextReader with
+        member __.AdvanceAsync() = 
+            __.ReadAsync() |> Async.AwaitTask |> Async.Ignore
+
+        /// match the provided JsoonTokenreader to the expectedtoken sequence
+        /// the first token is matched without calling read on on the sequence
+        /// the reader will only advance if there is at least two elements in the sequence
+        member __.Expect expectedTokenSequence =
+            let isMatch (tokenType, tokenValue) = (__.TokenType = tokenType) && (match tokenValue with | Some v -> __.Value.ToString().Equals(v, StringComparison.OrdinalIgnoreCase) | None -> true )
+            let rec matchSeq e = 
+                async {
+                    match e with
+                    | [h] when isMatch h -> return true
+                    | h :: t when isMatch h -> 
+                            do! __.AdvanceAsync()
+                            return! matchSeq t    
+                
+                    | [] -> return true
+                    | _ -> return false
+                }
+            matchSeq expectedTokenSequence
+
+    let readRows<'T>(colDefs:ColumnDefinition[], reader:JsonTextReader) = asyncSeq {
         let typ = typeof<'T> 
         let propertyMap = 
             lazy
@@ -39,9 +45,9 @@ module ResultParer =
                 else
                     failwith "not supported yet"
 
-        match reader with
-        | JsonSequence [(JsonToken.PropertyName, Some ("Rows"));(JsonToken.StartArray, None)] _ ->  
-            let createInstance () =
+        match! reader.Expect [(JsonToken.PropertyName, Some ("Rows"));(JsonToken.StartArray, None)] with
+        | true ->  
+            let createInstance () = async {
                 if typ.IsClass then
                     let lowestNumberOfConstructorParameter = 
                         typ.GetConstructors()
@@ -59,26 +65,27 @@ module ResultParer =
                                 prop.SetValue(ob, Convert.ChangeType(reader.Value, prop.PropertyType))
                             | _ -> ()
                             count <- count+1
-                            reader.Read() |> ignore
-                        reader.Read() |> ignore
-                        ob
+                            do! reader.AdvanceAsync()
+                        do! reader.AdvanceAsync()
+                        return ob
                     | Some _ -> // could be an anounymous type
-                        let parameterValues = 
-                            seq {
+                        let! parameterValues = 
+                            asyncSeq {
                                 while reader.TokenType <> JsonToken.EndArray do
                                     yield reader.Value
-                                    reader.Read() |> ignore
+                                    do! reader.AdvanceAsync()
                             }
-                            |> Seq.toArray
+                            |> AsyncSeq.toArrayAsync
                         let ob = System.Activator.CreateInstance(typ, parameterValues)
-                        reader.Read() |> ignore
-                        ob :?> 'T
+                        do! reader.AdvanceAsync()
+                        return ob :?> 'T
                     | None -> 
-                        failwith (sprintf "class with no constructors are not supported '%O'" typ)
+                        return failwith (sprintf "class with no constructors are not supported '%O'" typ)
+
                         
                 elif FSharpType.IsRecord typ then
                     //let fields = FSharpType.GetRecordFields typ
-                    FSharpValue.MakeRecord(typ, serializer.Deserialize<obj[]> reader ) :?> 'T
+                    return FSharpValue.MakeRecord(typ, serializer.Deserialize<obj[]> reader ) :?> 'T
                     // :> 
 
                     // note: we need to read all the field values in an array, in the same order
@@ -88,105 +95,106 @@ module ResultParer =
                     
                     //failwith "record type not supported yet"
                 else
-                    failwithf "type '%s' not supported yet" typ.Name
+                    return failwithf "type '%s' not supported yet" typ.Name
+            }
                 
             // skipping the start of the array
-            reader.Read() |> ignore
+            do! reader.AdvanceAsync()
 
-            let tryReadRow () = 
-                match reader with 
-                | JsonSequence [(JsonToken.StartArray, None) ] _ ->
-                    reader.Read() |> ignore
-                    createInstance ()
-                    |> Some
-                | _ -> None
+            let tryReadRow () = async {
+                match! reader.Expect [(JsonToken.StartArray, None) ] with 
+                | true ->
+                    do! reader.AdvanceAsync()
+                    let! instance = createInstance ()
+                    return Some instance
+                | false -> return None
+            }
             
-            Seq.initInfinite(fun _ -> tryReadRow ())
-            |> Seq.takeWhile Option.isSome
-            |> Seq.map Option.get
+            yield! 
+                AsyncSeq.initInfiniteAsync(fun _ -> tryReadRow ())
+                |> AsyncSeq.takeWhile Option.isSome
+                |> AsyncSeq.map Option.get
 
-        | r -> 
-                failwith (sprintf "Unexpected format %O" r.TokenType)
+        | false -> 
+            return failwith (sprintf "Unexpected format %O" reader.TokenType)
+    }
 
-    let readColumnMetadata<'T>(reader:JsonTextReader) =
-        match reader with
-        | JsonSequence [ (JsonToken.PropertyName, Some("Columns") ) ; (JsonToken.StartArray, None ) ] _ ->
+    let readColumnMetadata<'T>(reader:JsonTextReader) = async {
+        match! reader.Expect [ (JsonToken.PropertyName, Some("Columns") ) ; (JsonToken.StartArray, None ) ] with
+        | true ->
             
             let colDefs = serializer.Deserialize<ColumnDefinition[]> reader
 
             if reader.TokenType = JsonToken.EndArray then 
-                reader.Read() |> ignore
+                do! reader.AdvanceAsync()
 
-            colDefs
+            return colDefs
 
             //match reader with 
             //| JsonSequence [(JsonToken.PropertyName, Some ("Rows")); (JsonToken.StartArray, None)] _ ->
             
             //| r -> 
             //    failwith (sprintf "Unexpected format %O" r.TokenType)
-        | r -> 
-            failwith (sprintf "Unexpected format %O" r.TokenType)
+        | false -> 
+           return  failwith (sprintf "Unexpected format %O" reader.TokenType)
+    }
         
-    let readTableData<'T>(reader:JsonTextReader) =
-        match reader with
-        | JsonSequence [(JsonToken.PropertyName, Some( "Tables") ); (JsonToken.StartArray, None); (JsonToken.StartObject, None)] _ -> 
-            reader.Read() |> ignore
+    let readTableData<'T>(reader:JsonTextReader) = asyncSeq {
+        match! reader.Expect [(JsonToken.PropertyName, Some( "Tables") ); (JsonToken.StartArray, None); (JsonToken.StartObject, None)] with
+        | true -> 
+            let! _ = reader.ReadAsync() |> Async.AwaitTask
             // skipping to the column defiition
             while ( not <| reader.Value.ToString().Equals("Columns", StringComparison.OrdinalIgnoreCase)) do
-                reader.Read() |> ignore
-            let columnDefs = readColumnMetadata<'T>(reader)
-            readRows<'T>(columnDefs, reader)
+                do! reader.AdvanceAsync()
+            let! columnDefs = readColumnMetadata<'T>(reader)
+            yield! readRows<'T>(columnDefs, reader)
 
-             
-        | r -> 
-            failwith (sprintf "Unexpected format %O" r.TokenType)
+        | false -> 
+            failwith (sprintf "Unexpected format %O" reader.TokenType)
+    }
 
-    let readResults<'T>(stream:Stream) = 
-        seq {
-            use streamReader = new System.IO.StreamReader(stream)
-            use jsonReader =  new JsonTextReader(streamReader)
+    let readResults<'T>(stream:Stream) = asyncSeq {
+        use streamReader = new System.IO.StreamReader(stream)
+        use jsonReader =  new JsonTextReader(streamReader)
 
-            match jsonReader with
-            | JsonSequence [(JsonToken.None, None); (JsonToken.StartObject, None); (JsonToken.PropertyName, Some( "Tables") )] _ ->
-                for row in readTableData<'T>(jsonReader) do
-                    yield row
-            | tokenType -> 
-                failwith (sprintf "Unexpected format %O" tokenType)
-        }
+        match! jsonReader.Expect [(JsonToken.None, None); (JsonToken.StartObject, None); (JsonToken.PropertyName, Some( "Tables") )] with
+        | true ->
+            yield! readTableData<'T>(jsonReader)
+        | false -> 
+            failwith (sprintf "Unexpected format %O" jsonReader.TokenType)
+    }
 
     let createClient (address:string, apiKey:string) = 
         let client = new HttpClient(BaseAddress = Uri address)
         client.DefaultRequestHeaders.Add("x-api-key",sprintf "%s" apiKey)
         client
 
-    let getSchema (address:string, apiKey:string) =
-        async {
-            use client = createClient (address, apiKey)
-            let! result = client.GetAsync(sprintf "%s/query/schema" address) |> Async.AwaitTask
-            if result.IsSuccessStatusCode then
-                let! str = result.Content.ReadAsStringAsync() |> Async.AwaitTask
-                let tableData = JsonConvert.DeserializeObject<TableDefnitions>(str)
-                return tableData
-            else
-                let! resultText = result.Content.ReadAsStringAsync() |> Async.AwaitTask
-                return failwith (sprintf "Failed query, Status code: %d;\n%s" (int result.StatusCode) resultText)
-        }
+    let getSchema (address:string, apiKey:string) = async {
+        use client = createClient (address, apiKey)
+        let! result = client.GetAsync(sprintf "%s/query/schema" address) |> Async.AwaitTask
+        if result.IsSuccessStatusCode then
+            let! str = result.Content.ReadAsStringAsync() |> Async.AwaitTask
+            let tableData = JsonConvert.DeserializeObject<TableDefnitions>(str)
+            return tableData
+        else
+            let! resultText = result.Content.ReadAsStringAsync() |> Async.AwaitTask
+            return failwith (sprintf "Failed query, Status code: %d;\n%s" (int result.StatusCode) resultText)
+    }
 
-    let sendRequest<'T> (address:string, apiKey:string) (request:string) =
-        async {
-            use client = createClient (address, apiKey)
-            let request = sprintf "%s/query?query=%s" address (Uri.EscapeDataString request)
+    let sendRequest<'T> (address:string, apiKey:string) (request:string) = asyncSeq {
+        use client = createClient (address, apiKey)
+        let request = sprintf "%s/query?query=%s" address (Uri.EscapeDataString request)
 
-            let! result = 
-                client.GetAsync request
-                |> Async.AwaitTask
+        let! result = 
+            client.GetAsync request
+            |> Async.AwaitTask
 
-            if result.IsSuccessStatusCode then
-                let! resultStream = result.Content.ReadAsStreamAsync() |> Async.AwaitTask
-                return readResults<'T>(resultStream)
-            else
-                let! resultText = result.Content.ReadAsStringAsync() |> Async.AwaitTask
-                return failwith (sprintf "Failed query, Status code: %d;\n%s" (int result.StatusCode) resultText)
-        }
+        if result.IsSuccessStatusCode then
+            let! resultStream = result.Content.ReadAsStreamAsync() |> Async.AwaitTask
+            yield! readResults<'T>(resultStream)
+        else
+            let! resultText = result.Content.ReadAsStringAsync() |> Async.AwaitTask
+            return failwith (sprintf "Failed query, Status code: %d;\n%s" (int result.StatusCode) resultText)
+    }
 
             

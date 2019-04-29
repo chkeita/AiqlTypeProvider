@@ -6,6 +6,7 @@ open System.Net.Http
 open System
 open ExpressionBuilder.ResultParer
 open Newtonsoft.Json
+open FSharp.Control
 
 type Request () =
     member val timestamp = Unchecked.defaultof<DateTime> with get, set
@@ -56,6 +57,6 @@ module ResultParserTest =
         let filePath = "sampleAiqlResult.json"
         use fileStream = System.IO.File.OpenRead filePath
         let resultSequence = readResults<Request>(fileStream)
-        Assert.All(resultSequence, fun elem -> Assert.NotEqual( Unchecked.defaultof<DateTime>, elem.timestamp ))
+        Assert.All(resultSequence |> AsyncSeq.toBlockingSeq, fun elem -> Assert.NotEqual( Unchecked.defaultof<DateTime>, elem.timestamp ))
 
 

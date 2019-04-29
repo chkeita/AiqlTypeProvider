@@ -9,11 +9,12 @@ open ExpressionBuilder.Expression
 open ExpressionBuilder.ResultParer
 open ProviderImplementation.ProvidedTypes
 open ProviderImplementation.ProvidedTypes.UncheckedQuotations
+open FSharp.Control
 
 type ApplicationInsightsBase() = class end
 
 type ApplicationInsightsContext (address:string, apiKey:string) =
-    member this.QueryData<'T> ([<ReflectedDefinition>] q: Quotations.Expr<seq<'T>>) : Async<seq<'T>> =
+    member this.QueryData<'T> ([<ReflectedDefinition>] q: Quotations.Expr<seq<'T>>) : AsyncSeq<'T> =
         q
         |> Expression.toAiqlQuery 
         |> ExpressionWriter.fromAiqlQuery

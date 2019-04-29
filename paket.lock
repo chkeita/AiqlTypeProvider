@@ -2,6 +2,9 @@ STORAGE: PACKAGES
 RESTRICTION: || (== net462) (== netstandard2.0)
 NUGET
   remote: https://api.nuget.org/v3/index.json
+    FSharp.Control.AsyncSeq (2.0.21)
+      FSharp.Core (>= 3.1.2) - restriction: || (== net462) (&& (== netstandard2.0) (>= net45))
+      FSharp.Core (>= 4.3.2) - restriction: || (&& (== net462) (< net45) (>= netstandard2.0)) (== netstandard2.0)
     FSharp.Core (4.6.2)
     Microsoft.NETCore.Platforms (2.2) - restriction: || (== net462) (&& (== netstandard2.0) (>= net461))
     NETStandard.Library (2.0.3) - restriction: || (== net462) (&& (== netstandard2.0) (>= net461))
