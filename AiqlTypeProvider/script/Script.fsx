@@ -3,6 +3,7 @@
 #r "System.Runtime.Serialization"
 #r "System.Net.Http"
 #r @"C:\Users\keita\.nuget\packages\newtonsoft.json\12.0.1\lib\netstandard2.0\Newtonsoft.Json.dll"
+#r @"C:\Users\keita\.nuget\packages\fsharp.control.asyncseq\2.0.21\lib\netstandard2.0\FSharp.Control.AsyncSeq.dll"
 #load @"..\Contract.fs"
 #load @"..\AiqlResultParser.fs"
 #load @"..\ExpressionBuilder.fs"
@@ -35,6 +36,10 @@ type Request () =
 //    |> logIt "Expression"
 //    |> ExpressionWriter.fromAiqlQuery
 //    |> logIt "Qie"
+
+<@
+    fun (x:Request) -> {|x with test = 1|}
+@>
 
 
 let fsharpExpression = 

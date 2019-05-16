@@ -33,6 +33,7 @@ module Expression =
     | Sort
     | Project
     | Join
+    | Extend
     
 
     and AiqlExpressionBody =
@@ -69,6 +70,7 @@ module Expression =
     let limit<'elemType> (size: int) (query:seq<'elemType>) : seq<'elemType> = NotImplementedException () |> raise
     let orderBy<'elemType,'result,'seqType when 'seqType :> seq<'elemType>>  ([<ReflectedDefinition>] predicate:'elemType -> 'result ) (query:'seqType) : seq<'elemType> = new NotImplementedException () |> raise
     let project<'elemType,'result,'seqType when 'seqType :> seq<'elemType>>  ([<ReflectedDefinition>] predicate:'elemType -> 'result ) (query:'seqType) : seq<'result> = new NotImplementedException () |> raise
+    let extend<'elemType,'result,'seqType when 'seqType :> seq<'elemType>>  ([<ReflectedDefinition>] predicate:'elemType -> 'result ) (query:'seqType) : seq<'result> = new NotImplementedException () |> raise
     let join<'leftEntity,'leftSeq,'rightEntity,'rightSeq 
                 when 'leftSeq :> seq<'leftEntity> 
                 and 'rightSeq :> seq<'rightEntity>>  
@@ -217,6 +219,9 @@ module Expression =
         | Quotations.DerivedPatterns.SpecificCall <@ project @> (_,_ ,projectArgs) ->
             toTabularExpression AiqlTabularOperator.Project projectArgs
 
+        | Quotations.DerivedPatterns.SpecificCall <@ extend @> (_,_ ,extendArgs) ->
+            toTabularExpression AiqlTabularOperator.Extend extendArgs
+
         | Quotations.DerivedPatterns.SpecificCall <@ join @> (_,_ ,joinArgs) ->
             match joinArgs with
             | [Quotations.DerivedPatterns.Lambdas ([vars], body ); queryLeft; queryRight ] ->
@@ -270,7 +275,13 @@ module Expression =
         | Quotations.Patterns.PropertyGet (Some (Quotations.Patterns.Var varName), propertyInfo, _) -> 
             match operator with
             | Some ([left; right], AiqlTabularOperator.Join) -> 
-                let propertyName = if varName.Name = left.Name then "$left" else "$right"
+                let propertyName = 
+                    if varName.Name = left.Name then 
+                        "$left" 
+                    elif varName.Name = right.Name then
+                        "$right"
+                    else
+                        varName.Name
 
                 AiqlExpressionBody.PropertyGet (propertyName, propertyInfo.Name)
             | _ -> 

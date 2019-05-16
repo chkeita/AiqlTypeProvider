@@ -12,11 +12,11 @@ let main argv =
     //let context = appinsight.Context.QueryData
     let x = appinsight.Context.QueryData(
                 appinsight.requests 
-                |> ExpressionBuilder.Expression.take 10
-                |> ExpressionBuilder.Expression.project (fun r ->  {| AppId = r.appId; Client_Browser = r.client_Browser |}) 
+                //|> ExpressionBuilder.Expression.take 10
+                //|> ExpressionBuilder.Expression.project (fun r ->  {| AppId = r.appId; Client_Browser = r.client_Browser |}) 
             ) |> AsyncSeq.toBlockingSeq
     let head = Seq.head x
 
-    printfn "%O" head
+    printfn "%A" head
     System.Console.ReadKey() |> ignore
     0 // return an integer exit code

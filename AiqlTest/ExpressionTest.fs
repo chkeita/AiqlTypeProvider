@@ -110,6 +110,21 @@ module Tests =
             ) 
         ]
 
+    let ``Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" }) |> extend`` =
+        [
+            AiqlExpression( 
+                TabularExpression(
+                    [Table "requests"], 
+                    Project,
+                    PropPertyList
+                        [
+                            "ResultCode", PropertyGet ("r", "resultCode")
+                            "TestField", ConstantExpression ""
+                        ]
+                )
+            ) 
+        ]
+
     let ``Tables.requests |> project (fun r ->  {TestField = "" ; ResultCode = r.resultCode})``=
         [
             AiqlExpression( 

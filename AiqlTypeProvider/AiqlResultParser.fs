@@ -48,7 +48,25 @@ module ResultParer =
         match! reader.Expect [(JsonToken.PropertyName, Some ("Rows"));(JsonToken.StartArray, None)] with
         | true ->  
             let createInstance () = async {
-                if typ.IsClass then
+                if FSharpType.IsRecord typ then
+                    //let fields = FSharpType.GetRecordFields typ
+                    let! parameterValues = 
+                        asyncSeq {
+                            while reader.TokenType <> JsonToken.EndArray do
+                                yield reader.Value
+                                do! reader.AdvanceAsync()
+                        }
+                        |> AsyncSeq.toArrayAsync
+                    return FSharpValue.MakeRecord(typ, parameterValues) :?> 'T
+                    // :> 
+
+                    // note: we need to read all the field values in an array, in the same order
+                    // as the fields in the FSharpType.GetRecordFields array
+                    // possible optimisation  is to make sure that when the query returns a record
+                    // the corresponding AIQL query should list the property in the expected order
+                    
+                    //failwith "record type not supported yet"
+                elif typ.IsClass then
                     let lowestNumberOfConstructorParameter = 
                         typ.GetConstructors()
                         |> Seq.map (fun c -> c.GetParameters())
@@ -76,24 +94,12 @@ module ResultParer =
                                     do! reader.AdvanceAsync()
                             }
                             |> AsyncSeq.toArrayAsync
-                        let ob = System.Activator.CreateInstance(typ, parameterValues)
+                        //let ob = System.Activator.CreateInstance(typ, parameterValues)
+                        let ob = Activator.CreateInstance(typ, BindingFlags.Instance ||| BindingFlags.Public ||| BindingFlags.CreateInstance, null, parameterValues, null, null)
                         do! reader.AdvanceAsync()
                         return ob :?> 'T
                     | None -> 
                         return failwith (sprintf "class with no constructors are not supported '%O'" typ)
-
-                        
-                elif FSharpType.IsRecord typ then
-                    //let fields = FSharpType.GetRecordFields typ
-                    return FSharpValue.MakeRecord(typ, serializer.Deserialize<obj[]> reader ) :?> 'T
-                    // :> 
-
-                    // note: we need to read all the field values in an array, in the same order
-                    // as the fields in the FSharpType.GetRecordFields array
-                    // possible optimisation  is to make sure that when the query returns a record
-                    // the corresponding AIQL query should list the property in the expected order
-                    
-                    //failwith "record type not supported yet"
                 else
                     return failwithf "type '%s' not supported yet" typ.Name
             }

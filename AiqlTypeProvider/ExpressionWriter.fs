@@ -35,6 +35,7 @@ module ExpressionWriter =
         | Sort -> "sort"
         | Project -> "project"
         | Join -> "join"
+        | Extend -> "extend"
 
     let rec fromAiqlQuery q =
         q

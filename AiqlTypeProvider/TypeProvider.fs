@@ -10,6 +10,7 @@ open ExpressionBuilder.ResultParer
 open ProviderImplementation.ProvidedTypes
 open ProviderImplementation.ProvidedTypes.UncheckedQuotations
 open FSharp.Control
+open System.Reflection
 
 type ApplicationInsightsBase() = class end
 
@@ -22,6 +23,9 @@ type ApplicationInsightsContext (address:string, apiKey:string) =
        
 type SourceStream() = 
     class end
+
+/// We use this type to retrieve the custom attributes of a record type
+type MyRecordType = { Dummy1:string ; Dummy2: int}
 
 [<TypeProvider>]
 type AiqlTypeProvider (config : TypeProviderConfig) as this =
@@ -40,6 +44,8 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
             | "ingestionTime" -> typeof<DateTimeOffset>
             | ty -> Type.GetType ty
 
+        let customAttributeData = typeof<MyRecordType>.GetCustomAttributesData()
+
         let tableTypes = 
             tableData.Tables
             |> Seq.collect(fun x -> x.Rows)
@@ -47,22 +53,53 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
             |> Seq.groupBy (fun (tableName, _, _, _) -> tableName )
             |> Seq.map(fun (key, grp) -> 
                 let myType = ProvidedTypeDefinition(key, Some typeof<SourceStream>, isErased=false)
-                myType.AddMember <|  ProvidedConstructor([], invokeCode = fun _ -> <@@ () @@>)
-                for (_, columnName, typeName, columnType) in grp do 
-                    if isNull columnType then 
-                        failwithf "Unknown column type: %s" typeName
-                    let field = ProvidedField("_" + columnName, columnType)
+                customAttributeData
+                |> Seq.iter myType.AddCustomAttribute
+                //myType.AddMember <|  ProvidedConstructor([], invokeCode = fun _ -> <@@ () @@>)
+                //for (_, columnName, typeName, columnType) in grp do
+                
+                let providedTypeMembers =
+                    grp
+                    |> Seq.map (fun (_, columnName, typeName, columnType) -> 
+                        if isNull columnType then 
+                            failwithf "Unknown column type: %s" typeName
+                        let field = ProvidedField("_" + columnName, columnType)
+                        let property = 
+                            ProvidedProperty(
+                                columnName, 
+                                columnType,
+                                getterCode = 
+                                    (fun args -> Quotations.Expr.FieldGetUnchecked(args.[0], field))
+                                //setterCode = 
+                                //    (fun args -> Quotations.Expr.FieldSetUnchecked(args.[0], field, args.[1]))
+                            )
+                        
+                        field, property
+                    ) |> Seq.toList
+                providedTypeMembers
+                |> Seq.iter (fun (field, property) ->  
                     myType.AddMember field
-                    myType.AddMember( 
-                        ProvidedProperty(
-                            columnName, 
-                            columnType,
-                            getterCode = 
-                                (fun args -> Quotations.Expr.FieldGetUnchecked(args.[0], field)),
-                            setterCode = 
-                                (fun args -> Quotations.Expr.FieldSetUnchecked(args.[0], field, args.[1])))
-                        )
-                    
+                    myType.AddMember property
+                )
+                let constructorParameters = providedTypeMembers |> Seq.map (fun (f,p) -> f, ProvidedParameter(p.Name, p.PropertyType)) |> Seq.toList
+
+                let buildSequentialExpression fields args =
+                    let rec buildSequentialExpression this = 
+                        function
+                        | [] -> <@@ () @@>
+                        | (field, arg)  :: t ->
+                            Quotations.Expr.Sequential(
+                                Quotations.Expr.FieldSetUnchecked(this, field, arg),
+                                buildSequentialExpression this t
+                            )
+                    match args with 
+                    | [] -> invalidArg "args" "args is not supposed to be empty"
+                    | this :: args -> 
+                        buildSequentialExpression this (List.zip fields args)
+                let invoke = buildSequentialExpression (providedTypeMembers |> List.map fst)
+
+                myType.AddMember <|  ProvidedConstructor(constructorParameters |> List.map snd, invokeCode = invoke )    
+
                 myType
             )
             |> Seq.toList
