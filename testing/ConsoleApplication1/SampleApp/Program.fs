@@ -12,7 +12,8 @@ let main argv =
     //let context = appinsight.Context.QueryData
     let x = appinsight.Context.QueryData(
                 appinsight.requests 
-                //|> ExpressionBuilder.Expression.take 10
+
+                |> ExpressionBuilder.Expression.take 10
                 //|> ExpressionBuilder.Expression.project (fun r ->  {| AppId = r.appId; Client_Browser = r.client_Browser |}) 
             ) |> AsyncSeq.toBlockingSeq
     let head = Seq.head x

@@ -9,9 +9,8 @@
     <PackageOutputPath>..\packages</PackageOutputPath>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\paket-files\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi" Link="ProvidedTypes.fsi" />
     <Compile Include="..\paket-files\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fs" Link="ProvidedTypes.fs" />
-    <Compile Include="ProvidedTypeExtension.fs" />
+    <Compile Include="ProvidedTypeExtensions.fs" />
     <Compile Include="Contract.fs" />
     <Compile Include="AiqlResultParser.fs" />
     <Compile Include="ExpressionBuilder.fs" />
