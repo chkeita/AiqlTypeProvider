@@ -133,6 +133,14 @@ module Expression =
             | _ -> None
         isRecordCreation Map.empty expr
 
+    /// Handling of record extension
+    let (|RecordExtensionPattern|_|) expr =
+        match expr with
+        | Quotations.Patterns.NewRecord (typ, exprs) ->
+            let extendendProperties = exprs |> List.skipWhile(function | Quotations.Patterns.PropertyGet _ -> true | _ -> false )
+            Some (typ, extendendProperties)
+        | _ -> None
+
     let (|MatchOpErator|_|) expr =
         let operators =
             [
@@ -252,9 +260,16 @@ module Expression =
             let vars = vars |> Seq.map (fun x -> x.Name, (getAiqlType x.Type)) |> Seq.toArray
             AiqlExpressionBody.Lambda(vars, toBodyExpr operator bd)
 
+        //| RecordExtensionPattern
+
         | RecorCreationPattern (typ, recordArgs, exprs) ->
             let fields = FSharpType.GetRecordFields typ
             Seq.zip fields exprs
+            |> Seq.filter(fun (_, expr) -> 
+                match operator, expr with 
+                // We expect a record estension expression, So we skip all the properties that are copied 
+                | Some (_, AiqlTabularOperator.Extend), Quotations.Patterns.PropertyGet _ -> false
+                | _ -> true)
             |> Seq.map (
                 function
                 | (f,Quotations.Patterns.Var vr) ->

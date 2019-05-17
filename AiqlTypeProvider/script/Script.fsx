@@ -14,15 +14,16 @@ open ExpressionBuilder
 open System
 open Microsoft.FSharp.Reflection
 
-type Request () =
-    member val timestamp = Unchecked.defaultof<DateTime> with get, set
-    member val id = Unchecked.defaultof<string> with get, set
-    member val source = Unchecked.defaultof<string> with get, set
-    member val name = Unchecked.defaultof<string> with get, set
-    member val url = Unchecked.defaultof<string> with get, set
-    member val success = Unchecked.defaultof<string> with get, set
-    member val resultCode = Unchecked.defaultof<string> with get, set
-    member val duration = Unchecked.defaultof<float> with get, set
+type Request = {
+    timestamp: DateTime
+    id: string
+    source: string
+    name: string
+    url: string
+    success: string
+    resultCode: string
+    duration: float
+    }
 
 //let logIt message x =
 //    printfn "%s" message
@@ -37,15 +38,16 @@ type Request () =
 //    |> ExpressionWriter.fromAiqlQuery
 //    |> logIt "Qie"
 
-<@
-    fun (x:Request) -> {|x with test = 1|}
-@>
+//<@
+//    fun (x:Request) -> {|x with test = 1|}
+//@>
 
 
 let fsharpExpression = 
     <@ 
-        (Expression.getTable<Request>("Request"), Expression.getTable<Request>("Request"))
-        |> Expression.join( fun (left,right) -> left.name = right.name ) 
+        Expression.getTable<Request>("Request")
+        //|> Expression.join( fun (left,right) -> left.name = right.name ) 
+        |> Expression.extend( fun (x) -> {| x with test = 2 |} ) 
     @>
 
 let aiqlExpression = Expression.toAiqlQuery fsharpExpression
@@ -130,3 +132,4 @@ match
 Expression.getTable<Request>("Request") 
 |> Expression.where(fun x -> x.name = "blah")
 @>
+

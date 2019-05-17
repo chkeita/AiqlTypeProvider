@@ -9,10 +9,10 @@ open ExpressionBuilder.Expression
 
 type Result<'T> = OK of 'T | Error of string
 
-type Requests() =
-    member val resultCode = 0 with get,set
-    member val name = "" with get,set
-    override x.ToString() = sprintf "resultCode = %d" x.resultCode
+type Requests = {
+    resultCode: int 
+    name: string
+}
 
 type TestRecord = {
         ResultCode: int
@@ -26,7 +26,7 @@ module Tests =
         abstract timestamp : DateTime
         abstract operation_name : string
 
-    type Tables () =
+    type Tables =
         static member requests = Unchecked.defaultof<Requests[]>
 
     let ``Tables.requests |> where (fun x -> x.resultCode = 1)`` =
@@ -110,16 +110,15 @@ module Tests =
             ) 
         ]
 
-    let ``Tables.requests |> project (fun r ->  {ResultCode = r.resultCode; TestField = "" }) |> extend`` =
+    let ``Tables.requests |> extend (fun x -> {| x with test = 2 |})`` =
         [
             AiqlExpression( 
                 TabularExpression(
                     [Table "requests"], 
-                    Project,
+                    Extend,
                     PropPertyList
                         [
-                            "ResultCode", PropertyGet ("r", "resultCode")
-                            "TestField", ConstantExpression ""
+                            "test", ConstantExpression 2
                         ]
                 )
             ) 
@@ -225,6 +224,13 @@ module Tests =
             @>
             |> assertAiql ``Request | join (Request) ON  $left.name == $right.name``
 
+        [<Fact>]
+        member x.``Extend`` () = 
+            <@
+                Tables.requests |> extend (fun x -> {| x with test = 2 |})
+            @>
+            |> assertAiql ``Tables.requests |> extend (fun x -> {| x with test = 2 |})``
+
     
     type ExpressionWriterTest(output:ITestOutputHelper) =
         let assertAiql expected actual =
@@ -269,6 +275,11 @@ module Tests =
         member x.joinExpression() = 
             ``Request | join (Request) ON  $left.name == $right.name``
             |> assertAiql "requests | join (requests) ON  $left.name == $right.name"
+
+        [<Fact>]
+        member x.extend() = 
+            ``Tables.requests |> extend (fun x -> {| x with test = 2 |})``
+            |> assertAiql "requests | extend test = 2"
                 
 
         
