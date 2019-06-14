@@ -1,14 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.1</TargetFramework>
+    <TargetFramework>netcoreapp2.2</TargetFramework>
     <OutputType>Library</OutputType>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\paket-files\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypesTesting.fs" Link="ProvidedTypesTesting.fs" />
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="ExpressionTest.fs" />
     <Compile Include="ResultParserTest.fs" />
+    <Compile Include="AiqlTypeProviderTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

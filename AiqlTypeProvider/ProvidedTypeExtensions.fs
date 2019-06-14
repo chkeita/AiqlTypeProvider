@@ -32,6 +32,39 @@ type ProvidedRecordDefnition (className:string, baseType, recordFields :seq<stri
         | [] -> invalidArg "args" "args is not supposed to be empty"
         | this :: args ->
             buildSequentialExpression this (List.zip fields args)
+
+    do this.AddInterfaceImplementation (typedefof<IComparable>)
+    do this.AddMember(
+            ProvidedMethod(
+                "CompareTo", 
+                [ProvidedParameter("obj", typeof<Object>)],
+                typeof<int>,
+                invokeCode = (fun args -> <@@ 0 @@> )
+            ) 
+        )
+    do this.AddInterfaceImplementation (typedefof<IComparable<_>>.MakeGenericType(this))
+    do this.AddMember(
+            ProvidedMethod(
+                "CompareTo", 
+                [ProvidedParameter("obj", this)],
+                typeof<int>,
+                invokeCode = (fun args -> <@@ 0 @@> )
+            ) 
+        )
+    do this.AddInterfaceImplementation (typedefof<System.Collections.IStructuralComparable>)
+    do this.AddMember(
+            ProvidedMethod(
+                "CompareTo", 
+                [ProvidedParameter("obj", this); ProvidedParameter("comparer", typeof<System.Collections.IComparer>)],
+                typeof<int>,
+                invokeCode = (fun args -> <@@ 0 @@> )
+            ) 
+        )
+    //do this.AddInterfaceImplementation (typedefof<System.Collections.IStructuralEquatable>)    
+
+    //do this.AddInterfaceImplementation (typedefof<IEquatable<_>>.MakeGenericType(this))
+    
+    
     
     let providedTypeMembers =
         recordFields

@@ -26,14 +26,19 @@ type SourceStream() =
 
 [<TypeProvider>]
 type AiqlTypeProvider (config : TypeProviderConfig) as this =
+    
     inherit TypeProviderForNamespaces (config, addDefaultProbingLocation=true)
 
     let ns = "AzureQueryTypeProvider"
     let asm = ProvidedAssembly()
 
     let mainType = ProvidedTypeDefinition(asm, ns, "ApplicationInsights",  Some typeof<ApplicationInsightsBase>, isErased=false)
-    let createTypes typeName (address:string) (key:string) =
-        let tableData = getSchema (address, key) |> Async.RunSynchronously
+    let createTypes typeName address key=
+        
+        
+        let schema = getSchema ("https://api.applicationinsights.io/V1/apps/DEMO_APP", "DEMO_KEY") |> Async.RunSynchronously
+
+
         let tableType = ProvidedTypeDefinition(asm, ns, typeName,  Some typeof<ApplicationInsightsBase>, isErased=false)
         let convertType typeName =
             let typ = 
@@ -49,7 +54,7 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
                 typ
 
         let tableTypes =
-            tableData.Tables
+            schema.Tables
             |> Seq.collect(fun x -> x.Rows)
             |> Seq.map(
                 function
@@ -89,8 +94,10 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
             | [| :? string as address; :? string as apiKey |] ->
                 match (address,apiKey) with
                 | ("demo",_) | (_,"demo") ->
+                    
                     createTypes typeName "https://api.applicationinsights.io/V1/apps/DEMO_APP" "DEMO_KEY"
                 | _ ->
+                    
                     createTypes typeName address apiKey
             | _ -> failwith "unexpected parameter values"))
 
