@@ -1,16 +1,14 @@
 ﻿namespace AiqlTypeProvider
 
 open Microsoft.FSharp
-
 open Microsoft.FSharp.Core.CompilerServices
 open System
 open ExpressionBuilder
 open ExpressionBuilder.Expression
 open ExpressionBuilder.ResultParer
 open ProviderImplementation.ProvidedTypes
-open ProviderImplementation.ProvidedTypes.UncheckedQuotations
+open ProviderImplementation.ProvidedTypes.Extensions
 open FSharp.Control
-open System.Reflection
 
 type ApplicationInsightsBase() = class end
 
@@ -24,7 +22,7 @@ type ApplicationInsightsContext (address:string, apiKey:string) =
 type SourceStream() =
     class end
 
-[<TypeProvider>]
+//[<TypeProvider>]
 type AiqlTypeProvider (config : TypeProviderConfig) as this =
     
     inherit TypeProviderForNamespaces (config, addDefaultProbingLocation=true)
@@ -34,11 +32,7 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
 
     let mainType = ProvidedTypeDefinition(asm, ns, "ApplicationInsights",  Some typeof<ApplicationInsightsBase>, isErased=false)
     let createTypes typeName address key=
-        
-        
         let schema = getSchema ("https://api.applicationinsights.io/V1/apps/DEMO_APP", "DEMO_KEY") |> Async.RunSynchronously
-
-
         let tableType = ProvidedTypeDefinition(asm, ns, typeName,  Some typeof<ApplicationInsightsBase>, isErased=false)
         let convertType typeName =
             let typ = 
@@ -64,7 +58,7 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
             |> Seq.groupBy (fun (tableName, _, _, _) -> tableName )
             |> Seq.map(fun (key, grp) ->
                 let recordFields = grp |> Seq.map(fun (_, columnName, _, columnType) -> columnName, columnType )
-                ProvidedRecordDefnition(key, Some typeof<SourceStream>, recordFields , isErased=false)
+                ProvidedRecordDefnition(asm, ns, key, recordFields)
             )
             |> Seq.toList
 

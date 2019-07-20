@@ -16,6 +16,7 @@
     <Compile Include="ExpressionBuilder.fs" />
     <Compile Include="ExpressionWriter.fs" />
     <Compile Include="TypeProvider.fs" />
+    <Compile Include="TestTypeProvider.fs" />
     <None Include="script\Script.fsx" />
     <None Include="AiqlTypeProvider.nuspec" />
     <None Include="paket.references" />
