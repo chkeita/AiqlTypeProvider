@@ -31,24 +31,45 @@ type TestRecord2() =
     member __.p1 with get() = 1
     member __.p2 with get() = 1
 
-type TestType = TestProvider.TestMainType<blah="demo">
+
+type public TestType = TestProvider.TestMainType<blah="demo">
 
 let testRecordType () =
     FSharp.Reflection.FSharpType.IsRecord(typeof<TestType>)
-    |> printfn "%A" //--> true
+    |> printfn "%A" 
+    //=> true
+
+    typeof<TestType>
+        //.GetProperties()
+        .DeclaringType
+    //|> Seq.map(fun p -> p.DeclaringType)
+    |> printfn "TestType: %A" 
+
+    typeof<TestRecord>.GetProperties(Reflection.BindingFlags.Public)
+    |> printfn "TestRecord: %A" 
+
+    typeof<TestRecord>.CustomAttributes
+    |> printfn "%A" 
 
     let test1 = TestType("", 1)
-    printfn "%A" test1 // --> {prop1 = ""; prop2 = 1;}
+    printfn "%A" test1 
+    //=> {prop1 = "";
+    //=> prop2 = 1;}
 
     // This line does not compile 
     // error : The field, constructor or member 'prop1' is not defined
-    // {TestType.prop1 = ""; TestType.prop2 = 1}
+    
 
+    let rec1 = {TestType.prop1 = ""; TestType.prop2 = 1}
 
+    //let rec2 = {|rec1 with prop3 = true |}
+    let rec3 ={TestRecord.p1 = 2; TestRecord.p2 = 2}
+    rec1, rec1.prop1, rec3.p1
 
 [<EntryPoint>]
 let main argv =
     testRecordType()
+    |> printfn "%A"
 
     //printfn "%A" (FSharp.Reflection.FSharpType.IsRecord(typeof<TestType>))
     //typeof<TestType>.GetMethods()
