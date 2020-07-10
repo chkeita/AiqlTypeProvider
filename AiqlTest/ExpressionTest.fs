@@ -101,7 +101,7 @@ module Tests =
                 TabularExpression(
                     [Table "requests"], 
                     Project,
-                    PropPertyList
+                    PropertyList
                         [
                             "ResultCode", PropertyGet ("r", "resultCode")
                             "TestField", ConstantExpression ""
@@ -116,7 +116,7 @@ module Tests =
                 TabularExpression(
                     [Table "requests"], 
                     Extend,
-                    PropPertyList
+                    PropertyList
                         [
                             "test", ConstantExpression 2
                         ]
@@ -130,7 +130,7 @@ module Tests =
                 TabularExpression(
                     [Table "requests"], 
                     Project,
-                    PropPertyList
+                    PropertyList
                         [
                             "ResultCode", PropertyGet ("r", "resultCode")
                             "TestField", ConstantExpression ""
@@ -224,12 +224,12 @@ module Tests =
             @>
             |> assertAiql ``Request | join (Request) ON  $left.name == $right.name``
 
-        [<Fact>]
-        member x.``Extend`` () = 
-            <@
-                Tables.requests |> extend (fun x -> {| x with test = 2 |})
-            @>
-            |> assertAiql ``Tables.requests |> extend (fun x -> {| x with test = 2 |})``
+        //[<Fact>]
+        //member x.``Extend`` () = 
+        //    <@
+        //        Tables.requests |> extend (fun x -> {| x with test = 2 |})
+        //    @>
+        //    |> assertAiql ``Tables.requests |> extend (fun x -> {| x with test = 2 |})``
 
     
     type ExpressionWriterTest(output:ITestOutputHelper) =

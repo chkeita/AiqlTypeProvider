@@ -13,7 +13,15 @@ type TestTypePrivider (config : TypeProviderConfig) as this =
     let mainType = ProvidedTypeDefinition(asm, ns, "TestMainType",  Some typeof<obj>, isErased=false)
 
     let createTypes typeName z =
-        let recordType = ProvidedRecordDefnition(asm, ns, "TestType", ["prop1", typeof<string>; "prop2", typeof<int>])
+
+        let recordFields = 
+            [
+                "prop1", "Test property 1", typeof<string>
+                "prop2", "Test property 2", typeof<int>
+            ]
+            |> Seq.map (fun (name, description, fieldType) -> 
+                {Name = name; Description = description; FieldType = fieldType})
+        let recordType = ProvidedRecordDefnition(asm, ns, "TestType", recordFields)
         asm.AddTypes ([mainType;recordType])
         recordType :> ProvidedTypeDefinition
 

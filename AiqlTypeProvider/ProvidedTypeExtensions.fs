@@ -4,8 +4,9 @@ open System.Reflection
 open Microsoft.FSharp.Quotations
 open ProviderImplementation.ProvidedTypes
 
-module Utils = 
-    let makeSerializableAttribute () = 
+[<AutoOpen>]
+module Misc = 
+    let mkSerializableAttribute () = 
         { new CustomAttributeData() with
             member __.Constructor = typeof<SerializableAttribute>.GetConstructor([||])
             member __.ConstructorArguments = upcast [| CustomAttributeTypedArgument SourceConstructFlags.RecordType |]
@@ -13,7 +14,7 @@ module Utils =
         }
 
     let compilationMappingRecordTypeConstructor = typeof<CompilationMappingAttribute>.GetConstructor([|typeof<SourceConstructFlags>|])
-    let makeCompilationMappingAttribute() = 
+    let mkCompilationMappingAttribute() = 
         { new CustomAttributeData() with
             member __.Constructor = compilationMappingRecordTypeConstructor
             member __.ConstructorArguments = upcast [| CustomAttributeTypedArgument SourceConstructFlags.RecordType |]
@@ -21,7 +22,7 @@ module Utils =
         }
 
     let compilationMappingFieldConstructor = typeof<CompilationMappingAttribute>.GetConstructor([|typeof<SourceConstructFlags>; typeof<int>|])
-    let makeCompilationMappingForFields fieldIndex =
+    let mkCompilationMappingForFields fieldIndex =
         { new CustomAttributeData() with
             member __.Constructor = compilationMappingFieldConstructor
             member __.ConstructorArguments = upcast [| CustomAttributeTypedArgument SourceConstructFlags.Field; CustomAttributeTypedArgument fieldIndex |]
@@ -29,7 +30,7 @@ module Utils =
         }
 
     let compileGeneratedAttributeConstructor = typeof<System.Runtime.CompilerServices.CompilerGeneratedAttribute>.GetConstructor([||])
-    let makeCompilerGeneratedAttribute () = 
+    let mkCompilerGeneratedAttribute () = 
         { new CustomAttributeData() with
             member __.Constructor = compileGeneratedAttributeConstructor
             member __.ConstructorArguments = upcast [||]
@@ -37,12 +38,32 @@ module Utils =
         }
 
     let debuggerBrowsableAttributeConstructor = typeof<System.Diagnostics.DebuggerBrowsableAttribute>.GetConstructor [|typeof<System.Diagnostics.DebuggerBrowsableState>|]
-    let makeDebuggerBrowsableAttribute () =
+    let mkDebuggerBrowsableAttribute () =
         { new CustomAttributeData() with
             member __.Constructor = debuggerBrowsableAttributeConstructor
             member __.ConstructorArguments = upcast [| CustomAttributeTypedArgument System.Diagnostics.DebuggerBrowsableState.Never|]
             member __.NamedArguments = upcast [| |] 
         }
+
+type FieldDefinition = {
+    Name: string
+    Description: string
+    FieldType: Type
+}
+
+
+type ProvidedRecordDefnition (isTgt: bool, container:TypeContainer, className: string, recordFields:seq<FieldDefinition>, getBaseType: (unit -> Type option), attrs: TypeAttributes, getEnumUnderlyingType, staticParams, staticParamsApply, backingDataSource, customAttributesData, nonNullable, hideObjectMethods) as this =
+    inherit ProvidedTypeDefinition(isTgt, container, className, getBaseType, attrs, getEnumUnderlyingType, staticParams, staticParamsApply, backingDataSource, customAttributesData, nonNullable, hideObjectMethods)
+    do
+        [
+            mkSerializableAttribute ()
+            mkCompilationMappingAttribute()
+        ]
+        |> Seq.iter this.AddCustomAttribute
+
+    let createProvidedMethod(methodName, attrs, parameters, returnType, customAttributes, invokeCode) =
+        ProvidedMethod(false, methodName, attrs, Array.ofList parameters, returnType, Some invokeCode, [], None, K customAttributes)
+
     let buildFieldsAssignmentExpression fields args =
         let rec buildSequentialExpression this =
             function
@@ -58,14 +79,13 @@ module Utils =
             buildSequentialExpression this (List.zip fields args)
 
     let coerceToObj expr = Expr.Coerce(expr, typeof<System.Object>)
-    let coerce<'T> expr = Expr.Coerce(expr, typeof<'T>)
     let operatorsType = 
         match <@ 1 + 1 @> with 
         | Quotations.Patterns.Call (_, op, _) -> op.DeclaringType
         | _ -> failwith "Unexpected result for the quotation"
-
     let opEquality typ = operatorsType.GetMethod("op_Equality").MakeGenericMethod([|typ|])
     let opGreaterThan typ = operatorsType.GetMethod("op_GreaterThan").MakeGenericMethod([|typ|])
+    
     let buildGetHashCode self (fields:ProvidedField list) =
         let getHashCodeMethod (t:Type) = t.GetMethod("GetHashCode")
         (fields,<@ 0 @>)
@@ -75,8 +95,8 @@ module Utils =
             <@ 
                 %%Quotations.Expr.Call(selfField, hashCodeMethod, []) + ((%hashCode <<< 6) + (%hashCode >>> 2)) - 1640531527
             @>)
-        
-    let buildEquals typ self other fields =
+    
+    let buildEquals self other fields =
         let rec comparefields (fields:ProvidedField list) = 
             match fields with 
             | [] -> <@ false @>
@@ -99,7 +119,8 @@ module Utils =
             else
                 %%(coerceToObj other) <> null && %(comparefields fields)
         @@>
-    let buildCompareTo typ self other fields =
+    
+    let buildCompareTo self other fields =
         let rec comparefields (fields:ProvidedField list) = 
             match fields with 
             | [] -> <@ 0 @>
@@ -117,7 +138,6 @@ module Utils =
                     @>
                 else 
                     <@ -1 @>
-
         <@@
             if %%(coerceToObj self) = null then
                 if %%(coerceToObj other) = null then 0 else -1
@@ -125,26 +145,12 @@ module Utils =
                 if %%(coerceToObj other) = null then 1 else %(comparefields fields)
         @@>
 
-type ProvidedMethodWithAttributes(isTgt: bool, methodName: string, attrs: MethodAttributes, parameters: ProvidedParameter[], returnType: Type, invokeCode: (Expr list -> Expr) option, staticParams, staticParamsApply, customAttributesData) =
-    inherit ProvidedMethod(isTgt, methodName, attrs, parameters, returnType, invokeCode, staticParams, staticParamsApply, customAttributesData)
-    new (methodName, attrs, parameters, returnType, customAttributes, ?invokeCode, ?isStatic) =
-       ProvidedMethodWithAttributes(false, methodName, attrs, Array.ofList parameters, returnType, invokeCode, [], None, K customAttributes)
-
-type ProvidedRecordDefnition (isTgt: bool, container:TypeContainer, className: string, recordFields:seq<string*Type>, getBaseType: (unit -> Type option), attrs: TypeAttributes, getEnumUnderlyingType, staticParams, staticParamsApply, backingDataSource, customAttributesData, nonNullable, hideObjectMethods) as this =
-    inherit ProvidedTypeDefinition(isTgt, container, className, getBaseType, attrs, getEnumUnderlyingType, staticParams, staticParamsApply, backingDataSource, customAttributesData, nonNullable, hideObjectMethods)
-    do
-        [
-            Utils.makeSerializableAttribute ()
-            Utils.makeCompilationMappingAttribute()
-        ]
-        |> Seq.iter this.AddCustomAttribute
-
     let providedTypeMembers =
         recordFields
-        |> Seq.mapi (fun index (fieldName, fieldType) ->
+        |> Seq.mapi (fun index {Name = fieldName; FieldType = fieldType; Description = doc } ->
             if isNull fieldType then
                 failwithf "Unknown column type: %A" fieldType
-            let field = ProvidedField(false, sprintf "%s@" fieldName, FieldAttributes.Assembly, fieldType, null, (K [| Utils.makeDebuggerBrowsableAttribute() |]))
+            let field = ProvidedField(false, sprintf "%s@" fieldName, FieldAttributes.Assembly, fieldType, null, (K [| mkDebuggerBrowsableAttribute() |]))
             
             let getterCode = fun (args:list<Quotations.Expr>) -> Quotations.Expr.FieldGetUnchecked(args.[0], field)
             let pattrs = enum<MethodAttributes>(0) ||| MethodAttributes.Public ||| MethodAttributes.SpecialName ||| MethodAttributes.HideBySig
@@ -157,13 +163,16 @@ type ProvidedRecordDefnition (isTgt: bool, container:TypeContainer, className: s
                     PropertyAttributes.None,
                     fieldType,
                     false,
-                    getter |> Option.map (fun gt -> (fun () -> gt)) ,
+                    getter |> Option.map (fun gt -> (fun () -> gt)),
                     None,
                     [| |],
-                    K [| Utils.makeCompilationMappingForFields index |]
+                    K [| mkCompilationMappingForFields index |]
                 )
+            property.AddXmlDoc doc
             field, property
         ) |> Seq.toList
+
+    let providedFields = providedTypeMembers |> List.map fst
 
     do providedTypeMembers
         |> Seq.iter (fun (field, property) ->
@@ -173,94 +182,82 @@ type ProvidedRecordDefnition (isTgt: bool, container:TypeContainer, className: s
 
     do this.AddInterfaceImplementation (typedefof<IComparable<_>>.MakeGenericType(this))
     do this.AddMember(
-            ProvidedMethodWithAttributes(
-                "CompareTo", 
-                MethodAttributes.PrivateScope ||| MethodAttributes.Public ||| MethodAttributes.Final ||| MethodAttributes.Virtual  ||| MethodAttributes.HideBySig,
-                [ProvidedParameter("other", this)],
-                typeof<int>,
-                [| Utils.makeCompilerGeneratedAttribute() |],
-                invokeCode = (fun args -> 
-                    Utils.buildCompareTo this args.[0] args.[1] (providedTypeMembers |> List.map fst))
-            ) 
-        )
+        createProvidedMethod(
+            "CompareTo", 
+            MethodAttributes.PrivateScope ||| MethodAttributes.Public ||| MethodAttributes.Final ||| MethodAttributes.Virtual  ||| MethodAttributes.HideBySig,
+            [ProvidedParameter("other", this)],
+            typeof<int>,
+            [| mkCompilerGeneratedAttribute() |],
+            (fun args -> buildCompareTo args.[0] args.[1] providedFields) 
+        ) 
+    )
     
     do this.AddInterfaceImplementation (typedefof<IComparable>)
     do this.AddMember(
-            ProvidedMethodWithAttributes(
-                "CompareTo", 
-                MethodAttributes.PrivateScope ||| MethodAttributes.Public ||| MethodAttributes.Final ||| MethodAttributes.Virtual  ||| MethodAttributes.HideBySig,
-                [ProvidedParameter("obj", typeof<Object>)],
-                typeof<int>,
-                [| Utils.makeCompilerGeneratedAttribute() |],
-                invokeCode = (fun args -> 
-                    Utils.buildCompareTo this args.[0] (Expr.Coerce(args.[1], this)) (providedTypeMembers |> List.map fst)
-                )
-            ) 
-        )
+        createProvidedMethod(
+            "CompareTo", 
+            MethodAttributes.PrivateScope ||| MethodAttributes.Public ||| MethodAttributes.Final ||| MethodAttributes.Virtual  ||| MethodAttributes.HideBySig,
+            [ProvidedParameter("obj", typeof<Object>)],
+            typeof<int>,
+            [| mkCompilerGeneratedAttribute() |],
+            (fun args -> buildCompareTo args.[0] (Expr.Coerce(args.[1], this)) providedFields)
+        ) 
+    )
     do this.AddInterfaceImplementation (typedefof<System.Collections.IStructuralComparable>)
     do this.AddMember(
-            ProvidedMethodWithAttributes(
-                "CompareTo", 
-                MethodAttributes.PrivateScope ||| MethodAttributes.Public ||| MethodAttributes.Final ||| MethodAttributes.Virtual  ||| MethodAttributes.HideBySig,
-                [ProvidedParameter("other", typeof<Object>); ProvidedParameter("comparer", typeof<System.Collections.IComparer>)],
-                typeof<int>,
-                [| Utils.makeCompilerGeneratedAttribute() |],
-                invokeCode = (fun args -> 
-                    Utils.buildCompareTo this args.[0] (Expr.Coerce(args.[1], this)) (providedTypeMembers |> List.map fst) 
-                )
-            ) 
-        )
+        createProvidedMethod(
+            "CompareTo", 
+            MethodAttributes.PrivateScope ||| MethodAttributes.Public ||| MethodAttributes.Final ||| MethodAttributes.Virtual  ||| MethodAttributes.HideBySig,
+            [ProvidedParameter("other", typeof<Object>); ProvidedParameter("comparer", typeof<System.Collections.IComparer>)],
+            typeof<int>,
+            [| mkCompilerGeneratedAttribute() |],
+            (fun args -> buildCompareTo args.[0] (Expr.Coerce(args.[1], this)) providedFields)
+        ) 
+    )
     do this.AddInterfaceImplementation (typedefof<System.Collections.IStructuralEquatable>)
     do this.AddMember(
-        ProvidedMethodWithAttributes(
+        createProvidedMethod(
             "Equals", 
             MethodAttributes.PrivateScope ||| MethodAttributes.Public ||| MethodAttributes.Final ||| MethodAttributes.Virtual  ||| MethodAttributes.HideBySig,
             [ProvidedParameter("other", typeof<obj>); ProvidedParameter("comparer", typeof<System.Collections.IEqualityComparer>)],
             typeof<bool>,
-            [| Utils.makeCompilerGeneratedAttribute() |],
-            invokeCode = (fun args -> 
-                Utils.buildEquals this args.[0] (Expr.Coerce(args.[1], this)) (providedTypeMembers |> List.map fst) 
-            )
+            [| mkCompilerGeneratedAttribute() |],
+            (fun args -> buildEquals args.[0] (Expr.Coerce(args.[1], this)) providedFields)
         ) 
     )
 
     do this.AddInterfaceImplementation (typedefof<IEquatable<_>>.MakeGenericType(this))
     do this.AddMember(
-        ProvidedMethodWithAttributes(
+        createProvidedMethod(
             "Equals", 
             MethodAttributes.PrivateScope ||| MethodAttributes.Public ||| MethodAttributes.Final ||| MethodAttributes.Virtual  ||| MethodAttributes.HideBySig,
             [ProvidedParameter("other", this)],
             typeof<bool>,   
-            [| Utils.makeCompilerGeneratedAttribute() |],
-            invokeCode = (fun args -> 
-                Utils.buildEquals this args.[0] args.[1] (providedTypeMembers |> List.map fst) 
-            )
+            [| mkCompilerGeneratedAttribute() |],
+            (fun args -> buildEquals args.[0] args.[1] providedFields)
         ) 
     )
 
     do this.AddMember(
-        ProvidedMethodWithAttributes(
+        createProvidedMethod(
             "Equals", 
             MethodAttributes.PrivateScope ||| MethodAttributes.Public ||| MethodAttributes.Final ||| MethodAttributes.Virtual  ||| MethodAttributes.HideBySig,
             [ProvidedParameter("other", typeof<obj>)],
             typeof<bool>,   
-            [| Utils.makeCompilerGeneratedAttribute() |],
-            invokeCode = (fun args -> 
-                Utils.buildEquals this args.[0] (Expr.Coerce(args.[1], this)) (providedTypeMembers |> List.map fst) 
-            )
+            [| mkCompilerGeneratedAttribute() |],
+            (fun args -> buildEquals args.[0] (Expr.Coerce(args.[1], this)) providedFields)
         ) 
     )
 
     do this.AddMember(
-        ProvidedMethodWithAttributes(
+        createProvidedMethod(
             "GetHashCode", 
             MethodAttributes.PrivateScope ||| MethodAttributes.Public ||| MethodAttributes.Final ||| MethodAttributes.Virtual  ||| MethodAttributes.HideBySig,
             [ProvidedParameter("comparer", typeof<System.Collections.IEqualityComparer>)],
             typeof<int>,
-            [| Utils.makeCompilerGeneratedAttribute() |],
-            invokeCode = (fun args -> Utils.buildGetHashCode args.[0] (providedTypeMembers |> List.map fst) :> Quotations.Expr )
+            [| mkCompilerGeneratedAttribute() |],
+            (fun args -> buildGetHashCode args.[0] providedFields :> Quotations.Expr )
         )) 
-
 
     let constructorParameters = providedTypeMembers |> Seq.map (fun (f,p) -> f, ProvidedParameter(p.Name, p.PropertyType)) |> Seq.toList |> List.map snd
 
@@ -268,12 +265,12 @@ type ProvidedRecordDefnition (isTgt: bool, container:TypeContainer, className: s
         ProvidedConstructor(
             false, MethodAttributes.PrivateScope ||| MethodAttributes.Public ||| MethodAttributes.SpecialName ||| MethodAttributes.RTSpecialName, 
             Array.ofList constructorParameters, 
-            Utils.buildFieldsAssignmentExpression (providedTypeMembers |> List.map fst), 
+            buildFieldsAssignmentExpression providedFields, 
             None, 
             false, 
             K [| |]))
 
-    new (assembly:Assembly, namespaceName, className:string, recordFields :seq<string*Type>) =
+    new (assembly:Assembly, namespaceName, className:string, recordFields :seq<FieldDefinition>) =
         let attrs = 
             TypeAttributes.Public 
             ||| TypeAttributes.Class 

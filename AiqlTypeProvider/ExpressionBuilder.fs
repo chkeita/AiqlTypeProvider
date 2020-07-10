@@ -44,7 +44,7 @@ module Expression =
     | Var of string
     | Lambda of args:(string*AiqlType)[]*body:AiqlExpressionBody
     | FunctionAppliation of functionName:string*args:list<AiqlExpressionBody>
-    | PropPertyList of list<string*AiqlExpressionBody>
+    | PropertyList of list<string*AiqlExpressionBody>
 
     and AiqlExpression =
     | TabularExpression of source:list<AiqlExpression>*func:AiqlTabularOperator*body:AiqlExpressionBody
@@ -117,8 +117,8 @@ module Expression =
 
     /// Handling of Record creation
     /// When the members of a record are initialized an order which is diffretn
-    /// from the order in the record type defnition. The quoted expression will be iclude
-    /// intialisation statements
+    /// from the order in the record type defnition. The quoted expression will include
+    /// an intialisation statements
     /// Ex:
     /// type Test = { T1:string; T2:string; T3:string}
     /// <@ {T3 = "3"; T2 = "2"; T1 = "1" } @>
@@ -263,11 +263,12 @@ module Expression =
         //| RecordExtensionPattern
 
         | RecorCreationPattern (typ, recordArgs, exprs) ->
+            let exprs2 = exprs
             let fields = FSharpType.GetRecordFields typ
-            Seq.zip fields exprs
+            Seq.zip fields exprs2
             |> Seq.filter(fun (_, expr) -> 
                 match operator, expr with 
-                // We expect a record estension expression, So we skip all the properties that are copied 
+                // We expect a record extension expression, So we skip all the properties that are copied 
                 | Some (_, AiqlTabularOperator.Extend), Quotations.Patterns.PropertyGet _ -> false
                 | _ -> true)
             |> Seq.map (
@@ -282,7 +283,7 @@ module Expression =
                     f.Name, (toBodyExpr operator exp)
                 )
             |> Seq.toList
-            |> AiqlExpressionBody.PropPertyList
+            |> AiqlExpressionBody.PropertyList
 
         | Quotations.DerivedPatterns.Applications (Quotations.Patterns.Var v, [tupleArgs]) ->
             AiqlExpressionBody.FunctionAppliation(v.Name, tupleArgs |> List.map (toBodyExpr operator) )

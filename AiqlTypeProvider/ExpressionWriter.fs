@@ -87,7 +87,7 @@ module ExpressionWriter =
         | AiqlExpressionBody.Lambda (args, body) ->
             sprintf "(%s) { %s }"(args |> Seq.map (fun (name,typ) -> sprintf "%s:%s" name (getAiqlTypeString typ)) |> String.concat ", ") (fromAiqlExpressionBody outerExpression body)
         
-        | AiqlExpressionBody.PropPertyList props -> 
+        | AiqlExpressionBody.PropertyList props -> 
             props
             |> Seq.map(fun (name, body) -> sprintf "%s = %s" name (fromAiqlExpressionBody outerExpression body) )
             |> String.concat ", "

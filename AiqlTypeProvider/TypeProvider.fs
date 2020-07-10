@@ -57,7 +57,7 @@ type AiqlTypeProvider (config : TypeProviderConfig) as this =
                 )
             |> Seq.groupBy (fun (tableName, _, _, _) -> tableName )
             |> Seq.map(fun (key, grp) ->
-                let recordFields = grp |> Seq.map(fun (_, columnName, _, columnType) -> columnName, columnType )
+                let recordFields = grp |> Seq.map(fun (_, columnName, _, columnType) -> {Name = columnName; Description = ""; FieldType = columnType})
                 ProvidedRecordDefnition(asm, ns, key, recordFields)
             )
             |> Seq.toList
